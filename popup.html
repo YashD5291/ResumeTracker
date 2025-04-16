@@ -30,8 +30,7 @@
 
         select,
         input[type="text"],
-        input[type="file"],
-        input[type="password"] {
+        input[type="file"] {
             width: 100%;
             padding: 8px;
             margin-bottom: 12px;
@@ -43,6 +42,8 @@
         .button-group {
             display: flex;
             justify-content: space-between;
+            gap: 10px;
+            flex-wrap: wrap;
         }
 
         button {
@@ -270,126 +271,147 @@
             transition: width 0.3s;
         }
 
-        .loading-spinner {
-            display: inline-block;
-            width: 15px;
-            height: 15px;
-            border: 2px solid rgba(0, 0, 0, 0.1);
-            border-radius: 50%;
-            border-top-color: #4285f4;
-            animation: spin 1s ease-in-out infinite;
-            margin-left: 5px;
-            vertical-align: middle;
-        }
-
-        @keyframes spin {
-            to {
-                transform: rotate(360deg);
-            }
-        }
-
-        .mongodb-settings {
-            margin-bottom: 15px;
-            padding: 10px;
-            background-color: #f9f9f9;
+        .backup-section {
             border: 1px solid #ddd;
             border-radius: 4px;
+            padding: 12px;
+            margin-bottom: 16px;
+            background-color: #f9f9f9;
         }
 
-        .setup-btn {
-            width: 100%;
-            margin-top: 10px;
+        .import-zone {
+            border: 2px dashed #aaa;
+            padding: 15px;
+            text-align: center;
+            margin-bottom: 15px;
+            border-radius: 4px;
+            background-color: #f8f8f8;
+            cursor: pointer;
         }
 
-        .config-status {
+        .import-zone.dragover {
+            background-color: #e8f5e9;
+            border-color: #4caf50;
+        }
+
+        .error-message {
+            color: red;
+            margin-top: 8px;
+            display: none;
+        }
+
+        .info-message {
             margin-top: 8px;
             padding: 8px;
             border-radius: 4px;
-            text-align: center;
+            background-color: #e3f2fd;
+            display: none;
         }
 
-        .config-status.success {
+        .tag {
+            display: inline-block;
+            padding: 2px 8px;
+            font-size: 12px;
+            border-radius: 12px;
+            margin-right: 5px;
+            margin-bottom: 5px;
+        }
+
+        .tag-filter {
+            background-color: #e3f2fd;
+            color: #1565c0;
+            cursor: pointer;
+        }
+
+        .tag-filter:hover {
+            background-color: #bbdefb;
+        }
+
+        .tag-filter.active {
+            background-color: #1565c0;
+            color: white;
+        }
+
+        .tags-container {
+            margin-bottom: 10px;
+        }
+
+        .input-with-label {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .input-with-label label {
+            width: 120px;
+            margin-right: 10px;
+        }
+
+        .input-with-label input,
+        .input-with-label select {
+            flex: 1;
+            margin-bottom: 0;
+        }
+
+        .status-badges {
+            display: flex;
+            gap: 5px;
+            flex-wrap: wrap;
+            margin-top: 5px;
+        }
+
+        .status-badge {
+            padding: 2px 6px;
+            border-radius: 10px;
+            font-size: 11px;
+            background-color: #f1f1f1;
+        }
+
+        .status-applied {
+            background-color: #e3f2fd;
+            color: #1565c0;
+        }
+
+        .status-interview {
             background-color: #e8f5e9;
             color: #2e7d32;
         }
 
-        .config-status.error {
+        .status-rejected {
             background-color: #ffebee;
             color: #c62828;
         }
 
-        .switch {
-            position: relative;
-            display: inline-block;
-            width: 50px;
-            height: 24px;
-            margin-left: 10px;
+        .status-offer {
+            background-color: #fff8e1;
+            color: #ff8f00;
         }
 
-        .switch input {
-            opacity: 0;
-            width: 0;
-            height: 0;
-        }
-
-        .slider {
-            position: absolute;
-            cursor: pointer;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background-color: #ccc;
-            transition: .4s;
-            border-radius: 24px;
-        }
-
-        .slider:before {
-            position: absolute;
-            content: "";
-            height: 16px;
-            width: 16px;
-            left: 4px;
-            bottom: 4px;
-            background-color: white;
-            transition: .4s;
-            border-radius: 50%;
-        }
-
-        input:checked+.slider {
-            background-color: #2196F3;
-        }
-
-        input:checked+.slider:before {
-            transform: translateX(26px);
-        }
-
-        .toggle-row {
-            display: flex;
-            align-items: center;
-            margin-bottom: 10px;
-        }
-
-        .toggle-label {
-            flex-grow: 1;
-        }
-
-        .sync-indicator {
-            padding: 4px 8px;
-            border-radius: 10px;
-            font-size: 12px;
-            display: inline-block;
-            margin-left: 5px;
-        }
-
-        .synced {
+        .status-accepted {
             background-color: #e8f5e9;
             color: #2e7d32;
         }
 
-        .not-synced {
-            background-color: #fff8e1;
-            color: #ff8f00;
+        .hidden {
+            display: none;
+        }
+
+        .notification {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 10px 15px;
+            background-color: #4caf50;
+            color: white;
+            border-radius: 4px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+            opacity: 0;
+            transition: opacity 0.3s;
+            z-index: 100;
+        }
+
+        .notification.show {
+            opacity: 1;
         }
     </style>
 </head>
@@ -401,7 +423,7 @@
         <div class="tab active" data-tab="track">Track Application</div>
         <div class="tab" data-tab="manage">Manage Resumes</div>
         <div class="tab" data-tab="view">View Entries</div>
-        <div class="tab" data-tab="settings">Settings</div>
+        <div class="tab" data-tab="backup">Backup & Sync</div>
     </div>
 
     <!-- Track Application Tab -->
@@ -420,8 +442,19 @@
         </div>
 
         <div class="section">
-            <div class="section-title">Job Details (Optional)</div>
+            <div class="section-title">Job Details</div>
             <input type="text" id="jobTitle" placeholder="Job Title">
+            <div class="input-with-label">
+                <label for="applicationStatus">Status:</label>
+                <select id="applicationStatus">
+                    <option value="Applied">Applied</option>
+                    <option value="Interview">Interview</option>
+                    <option value="Rejected">Rejected</option>
+                    <option value="Offer">Offer</option>
+                    <option value="Accepted">Accepted</option>
+                </select>
+            </div>
+            <input type="text" id="jobTags" placeholder="Tags (comma separated, e.g., remote, fulltime, senior)">
         </div>
 
         <button id="saveEntry">Save This Application</button>
@@ -458,19 +491,24 @@
     <!-- View Entries Tab -->
     <div id="viewTab" class="tab-content">
         <div class="section">
-            <div class="section-title">Search Applications</div>
+            <div class="section-title">Filter Applications</div>
             <div class="search-box">
                 <input type="text" id="searchInput" placeholder="Search...">
                 <button id="searchBtn">Search</button>
+            </div>
+
+            <div class="tags-container" id="tagsContainer">
+                <!-- Tags will be inserted here -->
             </div>
 
             <div class="entry-list">
                 <table id="entriesTable">
                     <thead>
                         <tr>
-                            <th>Site</th>
-                            <th>Job</th>
+                            <th>Date</th>
+                            <th>Site/Job</th>
                             <th>Resume</th>
+                            <th>Status</th>
                             <th></th>
                         </tr>
                     </thead>
@@ -483,51 +521,38 @@
             <div class="button-group">
                 <button id="clearEntries" class="secondary">Clear All</button>
                 <button id="exportEntries">Export CSV</button>
-                <button id="syncNowBtn" style="display:none;">Sync Now</button>
             </div>
         </div>
     </div>
 
-    <!-- Settings Tab -->
-    <div id="settingsTab" class="tab-content">
+    <!-- Backup & Sync Tab -->
+    <div id="backupTab" class="tab-content">
         <div class="section">
-            <div class="section-title">MongoDB Configuration (Optional)</div>
-            <p>Configure MongoDB to sync your application entries across devices.</p>
-
-            <div class="toggle-row">
-                <span class="toggle-label">Enable MongoDB Sync</span>
-                <label class="switch">
-                    <input type="checkbox" id="enableMongoSync">
-                    <span class="slider"></span>
-                </label>
+            <div class="section-title">Backup & Restore</div>
+            
+            <div class="backup-options">
+                <div class="storage-info">
+                    <p id="storageInfo">Calculating storage usage...</p>
+                </div>
+                
+                <div class="button-group">
+                    <button id="createFullBackup">Create Full Backup</button>
+                    <button id="exportDataOnly" class="secondary">Export Data Only</button>
+                </div>
+                <p id="fullBackupInfo" style="display: none;"></p>
             </div>
-
-            <div id="mongoConfigForm" style="display:none;">
-                <input type="text" id="mongoUri" placeholder="MongoDB Connection URI">
-                <input type="text" id="dbName" placeholder="Database Name">
-                <input type="text" id="collectionName" placeholder="Collection Name">
-                <input type="text" id="apiKey" placeholder="API Key (for Data API)">
-                <input type="text" id="dataApiUrl" placeholder="Data API URL">
-
-                <button id="saveMongoConfig">Save MongoDB Configuration</button>
-                <button id="testConnection" class="secondary">Test Connection</button>
-                <div id="configStatus" class="config-status" style="display: none;"></div>
+            
+            <div class="section-title" style="margin-top: 20px;">Import Data</div>
+            <div id="importZone" class="import-zone">
+                <p>Drop backup file here or click to select</p>
+                <input type="file" id="importFile" accept=".rsbak,.json" style="display: none;">
             </div>
-
-            <div class="section-title" style="margin-top: 20px;">How to Set Up MongoDB</div>
-            <ol>
-                <li>Create a <a href="https://www.mongodb.com/cloud/atlas/register" target="_blank">MongoDB Atlas
-                        account</a> (free tier available)</li>
-                <li>Create a cluster and database</li>
-                <li>Set up the MongoDB Data API in the Atlas dashboard</li>
-                <li>Create an API Key with appropriate permissions</li>
-                <li>Enter the configuration details above</li>
-            </ol>
-
-            <p><strong>Note:</strong> Only application entries will be synced to MongoDB. PDF files will remain stored
-                locally in your browser.</p>
+            <p id="importStatus" style="display: none;"></p>
         </div>
     </div>
+
+    <!-- Notification -->
+    <div id="notification" class="notification"></div>
 
     <script src="popup.js"></script>
 </body>

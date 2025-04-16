@@ -10,6 +10,7 @@ A Chrome extension that automatically tracks which resume you upload to each job
 - **Search Functionality**: Easily find applications by company name, job title, or resume filename
 - **Status Management**: Update application status (Applied, Interview, Rejected, Offer, Accepted)
 - **Export to CSV**: Download your application history for backup or analysis
+- **Backup & Restore**: Create backups of your data and restore when needed
 
 ## Installation
 
@@ -49,9 +50,10 @@ A Chrome extension that automatically tracks which resume you upload to each job
    - Update application status (Applied, Interview, Rejected, Offer, Accepted)
    - Delete applications you no longer want to track
    
-4. **Export Data**:
-   - Click the "Export to CSV" button to download your application history
-   - The CSV file includes all tracked information for backup or analysis
+4. **Backup Your Data**:
+   - Go to the Backup tab
+   - Click "Create Full Backup" to save all your data
+   - Import backup files to restore your data
 
 ## Privacy
 
@@ -59,14 +61,14 @@ This extension:
 - Only stores data locally on your computer (using Chrome's storage API)
 - Does not send your data to any external servers
 - Only activates on pages where you upload resume files
-- Requires minimal permissions (storage and active tab access)
+- Requires minimal permissions (storage, active tab, and downloads)
 
 ## Troubleshooting
 
 If the extension doesn't detect your resume upload:
 - Make sure you're using a file input field to upload your resume
-- The extension looks for input fields with names/IDs containing "resume" or "cv"
 - Some websites with heavily customized file upload widgets may not be compatible
+- The extension has special handling for popular job sites like Dice.com
 
 ## License
 

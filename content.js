@@ -11,87 +11,14 @@ setTimeout(initializeTracker, 2000);
 function initializeTracker() {
     console.log('Resume Tracker initializing...');
 
-    // Add site-specific handlers
-    if (window.location.hostname.includes('dice.com')) {
-        handleDiceSite();
-    } else {
-        // Generic detection for other sites
-        detectResumeFields();
-    }
+    // Generic detection for sites
+    detectResumeFields();
 
     // Listen for form submissions
     detectFormSubmissions();
 
     // Setup XHR and Fetch interceptors for AJAX submissions
     interceptAjaxRequests();
-}
-
-// Site-specific handler for Dice.com
-function handleDiceSite() {
-    console.log('Dice.com detected, applying special handling');
-
-    // Dice uses various approaches for file uploads
-    const observers = [];
-
-    // Monitor for file upload dialogs that appear dynamically
-    const observer = new MutationObserver(mutations => {
-        for (const mutation of mutations) {
-            if (mutation.addedNodes.length) {
-                mutation.addedNodes.forEach(node => {
-                    if (node.nodeType === Node.ELEMENT_NODE) {
-                        // Check for file inputs in the new elements
-                        const fileInputs = node.querySelectorAll('input[type="file"]');
-                        fileInputs.forEach(input => {
-                            console.log('Dice: Found file input:', input);
-                            monitorFileInput(input);
-                        });
-
-                        // Check for buttons that might trigger resume uploads
-                        const buttons = node.querySelectorAll('button');
-                        buttons.forEach(button => {
-                            if (button.textContent.toLowerCase().includes('upload') ||
-                                button.textContent.toLowerCase().includes('resume') ||
-                                button.textContent.toLowerCase().includes('cv')) {
-                                button.addEventListener('click', function () {
-                                    console.log('Dice: Upload button clicked');
-                                    setTimeout(checkForFileInputs, 500);
-                                });
-                            }
-                        });
-                    }
-                });
-            }
-        }
-    });
-
-    // Start observing the entire document
-    observer.observe(document.body, { childList: true, subtree: true });
-    observers.push(observer);
-
-    // Also check for existing file inputs
-    checkForFileInputs();
-
-    // Special handling for "Apply" or "Submit" buttons on Dice
-    document.querySelectorAll('button').forEach(button => {
-        if (button.textContent.toLowerCase().includes('apply') ||
-            button.textContent.toLowerCase().includes('submit')) {
-            button.addEventListener('click', function () {
-                console.log('Dice: Apply/Submit button clicked');
-
-                // If we have a resume file recorded, capture the application data
-                if (resumeFileName) {
-                    captureApplicationData();
-
-                    // Wait a moment and send the data (Dice often uses AJAX)
-                    setTimeout(() => {
-                        if (applicationData) {
-                            saveApplication(applicationData);
-                        }
-                    }, 1000);
-                }
-            });
-        }
-    });
 }
 
 // Check for file inputs on the page
@@ -147,6 +74,26 @@ function detectResumeFields() {
             });
         }
     });
+    
+    // Set up a mutation observer to detect dynamically added file inputs
+    const observer = new MutationObserver(mutations => {
+        for (const mutation of mutations) {
+            if (mutation.addedNodes.length) {
+                mutation.addedNodes.forEach(node => {
+                    if (node.nodeType === Node.ELEMENT_NODE) {
+                        // Check for file inputs in new elements
+                        const fileInputs = node.querySelectorAll('input[type="file"]');
+                        fileInputs.forEach(input => {
+                            monitorFileInput(input);
+                        });
+                    }
+                });
+            }
+        }
+    });
+    
+    // Start observing the entire document
+    observer.observe(document.body, { childList: true, subtree: true });
 }
 
 // Check if a field is likely a resume upload
@@ -202,288 +149,217 @@ function getSurroundingText(element) {
     return surroundingText;
 }
 
-// Detect form submissions through various methods
+// Detect form submissions
 function detectFormSubmissions() {
-    // Monitor all forms
-    document.querySelectorAll('form').forEach(form => {
-        form.addEventListener('submit', function (event) {
-            console.log('Form submit detected');
+    // Listen for form submissions
+    document.addEventListener('submit', function (event) {
+        if (!formSubmitted && resumeFileName) {
+            formSubmitted = true;
+            console.log('Form submitted, capturing application data');
 
-            if (resumeFileName) {
+            // Ensure we have application data
+            if (!applicationData) {
                 captureApplicationData();
+            }
+
+            // Save the application data
+            if (applicationData) {
                 saveApplication(applicationData);
             }
-        });
+        }
     });
 
-    // Monitor submit buttons not in forms
-    document.querySelectorAll('button[type="submit"], input[type="submit"], button:not([type])').forEach(button => {
-        button.addEventListener('click', function (event) {
-            console.log('Submit button clicked');
-
-            if (resumeFileName) {
+    // Also listen for clicks on submit buttons
+    document.addEventListener('click', function (event) {
+        const button = event.target.closest('button, input[type="submit"]');
+        if (button) {
+            const buttonText = button.textContent.toLowerCase();
+            if ((buttonText.includes('apply') || buttonText.includes('submit')) && 
+                resumeFileName && !formSubmitted) {
+                console.log('Submit button clicked, capturing application data');
+                
+                // Capture and save application data with a slight delay
                 captureApplicationData();
-
-                // Give a slight delay to allow for AJAX form processing
                 setTimeout(() => {
                     if (applicationData) {
+                        formSubmitted = true;
                         saveApplication(applicationData);
                     }
                 }, 500);
             }
-        });
-    });
-
-    // Monitor navigation away from the page
-    window.addEventListener('beforeunload', function (event) {
-        // Only if we have a resume file but haven't submitted yet
-        if (resumeFileName && !formSubmitted && !applicationData) {
-            captureApplicationData();
-            saveApplication(applicationData);
         }
     });
 }
 
-// Intercept AJAX requests that might be form submissions
+// Intercept AJAX request to catch form submissions
 function interceptAjaxRequests() {
-    // For modern Fetch API
-    const originalFetch = window.fetch;
-    window.fetch = async function (...args) {
-        // Check if this might be a form/application submission
-        const [resource, config] = args;
-        let url = resource;
-
-        if (resource instanceof Request) {
-            url = resource.url;
-        }
-
-        // If URL contains application-related keywords and we have a resume
-        if (resumeFileName && !formSubmitted &&
-            (url.includes('apply') || url.includes('submit') || url.includes('application'))) {
-            console.log('Fetch API detected possible application submission', url);
-            captureApplicationData();
-            saveApplication(applicationData);
-        }
-
-        return originalFetch.apply(this, args);
-    };
-
-    // For older XMLHttpRequest
+    // Intercept XMLHttpRequest
     const originalXHROpen = XMLHttpRequest.prototype.open;
-    XMLHttpRequest.prototype.open = function (method, url, ...rest) {
-        // Store URL for checking on send
+    const originalXHRSend = XMLHttpRequest.prototype.send;
+
+    XMLHttpRequest.prototype.open = function (method, url) {
+        this._method = method;
         this._url = url;
-        return originalXHROpen.apply(this, [method, url, ...rest]);
+        return originalXHROpen.apply(this, arguments);
     };
 
-    const originalXHRSend = XMLHttpRequest.prototype.send;
-    XMLHttpRequest.prototype.send = function (body) {
-        // Check if this request might be a form submission
-        if (resumeFileName && !formSubmitted && this._url &&
-            (this._url.includes('apply') || this._url.includes('submit') || this._url.includes('application'))) {
-            console.log('XHR detected possible application submission', this._url);
-            captureApplicationData();
-            saveApplication(applicationData);
+    XMLHttpRequest.prototype.send = function (data) {
+        // Check if this might be an application submission and we have resume data
+        if (resumeFileName && !formSubmitted &&
+            (this._method.toLowerCase() === 'post' || this._url.includes('apply'))) {
+            
+            // Try to capture application data
+            if (!applicationData) {
+                captureApplicationData();
+            }
+            
+            // Save application with a delay to let the request complete
+            setTimeout(() => {
+                if (applicationData) {
+                    formSubmitted = true;
+                    saveApplication(applicationData);
+                }
+            }, 1000);
         }
-
+        
         return originalXHRSend.apply(this, arguments);
     };
+
+    // Intercept fetch API if available
+    if (window.fetch) {
+        const originalFetch = window.fetch;
+        window.fetch = function (url, options = {}) {
+            // Check if this might be an application submission
+            if (resumeFileName && !formSubmitted && 
+                options.method && options.method.toLowerCase() === 'post') {
+                
+                // Try to capture application data
+                if (!applicationData) {
+                    captureApplicationData();
+                }
+                
+                // Save application with a delay
+                setTimeout(() => {
+                    if (applicationData) {
+                        formSubmitted = true;
+                        saveApplication(applicationData);
+                    }
+                }, 1000);
+            }
+            
+            return originalFetch.apply(window, arguments);
+        };
+    }
 }
 
-// Capture application data from the page
+// Capture data about the current application
 function captureApplicationData() {
-    if (!resumeFileName) return null;
+    if (!resumeFileName) {
+        return;
+    }
 
-    console.log('Capturing application data');
-
-    // Extract job details from the page
-    const jobTitle = extractJobTitle();
+    // Extract company name and job title
     const companyName = extractCompanyName();
+    const jobTitle = extractJobTitle();
 
     // Create application data object
     applicationData = {
+        id: Date.now().toString(),
+        date: new Date().toISOString(),
+        companyName: companyName || window.location.hostname,
+        jobTitle: jobTitle || 'Unknown Position',
         resumeFileName: resumeFileName,
-        websiteUrl: window.location.href,
-        companyName: companyName,
-        jobTitle: jobTitle,
-        dateApplied: new Date().toISOString(),
-        status: "Applied"
+        applicationUrl: window.location.href,
+        status: 'Applied'
     };
 
-    console.log('Application data captured:', applicationData);
-    return applicationData;
+    console.log('Captured application data:', applicationData);
 }
 
-// Extract job title from the page with enhanced detection
+// Extract job title from the page
 function extractJobTitle() {
-    // Prioritize structured data if available (used by many job sites)
-    const jsonLdScripts = document.querySelectorAll('script[type="application/ld+json"]');
-    for (const script of jsonLdScripts) {
-        try {
-            const data = JSON.parse(script.textContent);
-            if (data && data.title) return data.title;
-            if (data && data["@type"] === "JobPosting" && data.title) return data.title;
-        } catch (e) {
-            // Continue if parsing fails
-        }
-    }
+    // Check for common job title elements
+    const titleElements = [
+        document.querySelector('h1'),
+        ...document.querySelectorAll('h2'),
+        ...document.querySelectorAll('h3'),
+        ...document.querySelectorAll('.job-title'),
+        ...document.querySelectorAll('[data-testid="jobTitle"]'),
+    ];
 
-    // Dice.com specific selectors
-    if (window.location.hostname.includes('dice.com')) {
-        const diceTitleSelectors = [
-            'h1.job-title',
-            '.job-details-header h1',
-            'h1.jobTitle',
-            'h1[data-cy="jobTitle"]'
-        ];
-
-        for (const selector of diceTitleSelectors) {
-            const element = document.querySelector(selector);
-            if (element && element.textContent.trim()) {
-                return element.textContent.trim();
+    for (const element of titleElements) {
+        if (element && element.textContent.trim()) {
+            // Check if the text looks like a job title
+            const text = element.textContent.trim();
+            if (text.length > 3 && text.length < 100) {
+                return text;
             }
         }
     }
 
-    // Try common selectors where job titles might be found
-    const selectors = [
-        'h1',
-        'h1.job-title',
-        'h1.jobTitle',
-        'h1.position-title',
-        '.job-title',
-        '.jobTitle',
-        '.position-title',
-        '[data-automation="job-title"]',
-        'title'
-    ];
-
-    for (const selector of selectors) {
-        const element = document.querySelector(selector);
-        if (element) {
-            const text = element.textContent.trim();
-            if (text) return text;
-        }
+    // Try to find it in document title
+    if (document.title && document.title.includes(' - ')) {
+        return document.title.split(' - ')[0].trim();
     }
 
-    // Try to find the most prominent heading that might be a job title
-    const headings = document.querySelectorAll('h1, h2');
-    for (const heading of headings) {
-        const text = heading.textContent.trim();
-        if (text && text.length < 100) { // Likely a title if relatively short
-            return text;
-        }
-    }
-
-    // Fallback to page title, cleaned up
-    const pageTitle = document.title;
-    // Try to extract just the job title part
-    if (pageTitle) {
-        // Often title is in format "Job Title - Company Name"
-        const parts = pageTitle.split(/[-|]/);
-        if (parts.length > 1) {
-            return parts[0].trim();
-        }
-        return pageTitle;
-    }
-
-    return "Unknown Position";
+    return null;
 }
 
-// Extract company name from the page with enhanced detection
+// Extract company name from the page
 function extractCompanyName() {
-    // Prioritize structured data if available
-    const jsonLdScripts = document.querySelectorAll('script[type="application/ld+json"]');
-    for (const script of jsonLdScripts) {
-        try {
-            const data = JSON.parse(script.textContent);
-            if (data && data.hiringOrganization && data.hiringOrganization.name) {
-                return data.hiringOrganization.name;
-            }
-            if (data && data["@type"] === "JobPosting" && data.hiringOrganization && data.hiringOrganization.name) {
-                return data.hiringOrganization.name;
-            }
-        } catch (e) {
-            // Continue if parsing fails
-        }
-    }
-
-    // Dice.com specific selectors
-    if (window.location.hostname.includes('dice.com')) {
-        const diceCompanySelectors = [
-            '.company-header-name',
-            'a[data-cy="companyNameLink"]',
-            '.employer-name',
-            '.company-name'
-        ];
-
-        for (const selector of diceCompanySelectors) {
-            const element = document.querySelector(selector);
-            if (element && element.textContent.trim()) {
-                return element.textContent.trim();
-            }
-        }
-    }
-
-    // Try common selectors for company names
-    const selectors = [
-        '.company-name',
-        '.employer-name',
-        '.companyName',
-        '.organization-name',
-        '[data-automation="company-name"]',
-        '[itemprop="hiringOrganization"]'
+    // Check for common company name elements
+    const companyElements = [
+        document.querySelector('.company-name'),
+        document.querySelector('[data-testid="companyName"]'),
+        document.querySelector('.employer'),
+        document.querySelector('.organization')
     ];
 
-    for (const selector of selectors) {
-        const element = document.querySelector(selector);
-        if (element) {
-            const text = element.textContent.trim();
-            if (text) return text;
+    for (const element of companyElements) {
+        if (element && element.textContent.trim()) {
+            return element.textContent.trim();
         }
     }
 
-    // Try to extract from page title
-    const pageTitle = document.title;
-    if (pageTitle) {
-        // Often title is in format "Job Title - Company Name"
-        const parts = pageTitle.split(/[-|]/);
+    // Try to extract from document title
+    if (document.title && document.title.includes(' - ')) {
+        const parts = document.title.split(' - ');
         if (parts.length > 1) {
             return parts[1].trim();
         }
     }
 
-    // Try to extract from URL
-    const hostname = window.location.hostname;
-    // Remove www. and .com/.org/etc.
-    const domainParts = hostname.split('.');
-    if (domainParts.length > 1) {
-        // Skip job board domains
-        const jobBoardDomains = ['dice', 'indeed', 'linkedin', 'glassdoor', 'monster', 'ziprecruiter'];
-        if (!jobBoardDomains.includes(domainParts[domainParts.length - 2].toLowerCase())) {
-            if (domainParts[0] === 'www') {
-                return domainParts[1].charAt(0).toUpperCase() + domainParts[1].slice(1);
-            } else {
-                return domainParts[0].charAt(0).toUpperCase() + domainParts[0].slice(1);
-            }
+    // Extract from hostname
+    try {
+        const hostname = window.location.hostname;
+        const parts = hostname.split('.');
+        
+        // Take the domain name
+        let companyName = parts[parts.length - 2];
+        
+        // If it starts with "www", try the next part
+        if (parts[0] === 'www' && parts.length > 2) {
+            companyName = parts[1];
         }
+        
+        // Capitalize first letter
+        return companyName.charAt(0).toUpperCase() + companyName.slice(1);
+    } catch (e) {
+        return null;
     }
-
-    return "Unknown Company";
 }
 
-// Save application data to storage
+// Save the application data
 function saveApplication(data) {
-    if (!data || formSubmitted) return;
-
-    console.log('Saving application data:', data);
-    formSubmitted = true;
-
-    // Send to background script for storage
-    chrome.runtime.sendMessage(
-        { action: 'saveApplication', data: data },
-        function (response) {
-            console.log('Application saved, response:', response);
+    // Send message to background script to save the data
+    chrome.runtime.sendMessage({
+        action: 'saveApplication',
+        data: data
+    }, function(response) {
+        if (response && response.success) {
+            console.log('Application saved successfully');
+        } else {
+            console.error('Failed to save application');
         }
-    );
+    });
 }

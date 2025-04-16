@@ -1,10 +1,4 @@
-let mongodbEnabled = false;
-let mongoConfig = null;
-
 document.addEventListener('DOMContentLoaded', function () {
-    // Check MongoDB configuration
-    checkMongoDBConfig();
-
     // Tab navigation
     const tabs = document.querySelectorAll('.tab');
     tabs.forEach(tab => {
@@ -17,29 +11,36 @@ document.addEventListener('DOMContentLoaded', function () {
             tab.classList.add('active');
             const tabName = tab.getAttribute('data-tab');
             document.getElementById(tabName + 'Tab').classList.add('active');
+
+            // Update storage info when going to backup tab
+            if (tabName === 'backup') {
+                updateStorageInfo();
+            }
         });
     });
 
     // Get current URL
     chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
-        const url = tabs[0].url;
-        document.getElementById('currentUrl').value = url;
+        if (tabs && tabs.length > 0) {
+            const url = tabs[0].url;
+            document.getElementById('currentUrl').value = url;
 
-        // Extract site name from URL
-        try {
-            const hostname = new URL(url).hostname;
-            const parts = hostname.split('.');
-            let siteName = parts[0];
+            // Extract site name from URL
+            try {
+                const hostname = new URL(url).hostname;
+                const parts = hostname.split('.');
+                let siteName = parts[0];
 
-            if (parts[0] === 'www') {
-                siteName = parts[1];
+                if (parts[0] === 'www') {
+                    siteName = parts[1];
+                }
+
+                // Capitalize first letter and remove common domain extensions
+                siteName = siteName.charAt(0).toUpperCase() + siteName.slice(1);
+                document.getElementById('siteName').value = siteName;
+            } catch (e) {
+                // URL parsing failed, leave empty
             }
-
-            // Capitalize first letter and remove common domain extensions
-            siteName = siteName.charAt(0).toUpperCase() + siteName.slice(1);
-            document.getElementById('siteName').value = siteName;
-        } catch (e) {
-            // URL parsing failed, leave empty
         }
     });
 
@@ -58,23 +59,41 @@ document.addEventListener('DOMContentLoaded', function () {
     document.getElementById('clearEntries').addEventListener('click', clearEntries);
     document.getElementById('exportEntries').addEventListener('click', exportEntries);
 
-    // MongoDB configuration events
-    document.getElementById('enableMongoSync').addEventListener('change', function () {
-        const mongoConfigForm = document.getElementById('mongoConfigForm');
-        if (this.checked) {
-            mongoConfigForm.style.display = 'block';
-        } else {
-            mongoConfigForm.style.display = 'none';
+    // Backup tab event listeners
+    document.getElementById('createFullBackup').addEventListener('click', createFullBackup);
+    document.getElementById('exportDataOnly').addEventListener('click', exportDataOnly);
+
+    // Import functionality
+    const importZone = document.getElementById('importZone');
+    const importFile = document.getElementById('importFile');
+
+    importZone.addEventListener('click', () => {
+        importFile.click();
+    });
+
+    importZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        importZone.classList.add('dragover');
+    });
+
+    importZone.addEventListener('dragleave', () => {
+        importZone.classList.remove('dragover');
+    });
+
+    importZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        importZone.classList.remove('dragover');
+
+        if (e.dataTransfer.files.length > 0) {
+            handleImportFile(e.dataTransfer.files[0]);
         }
     });
 
-    document.getElementById('saveMongoConfig').addEventListener('click', saveMongoDBConfig);
-    document.getElementById('testConnection').addEventListener('click', testMongoDBConnection);
-
-    const syncNowBtn = document.getElementById('syncNowBtn');
-    if (syncNowBtn) {
-        syncNowBtn.addEventListener('click', syncToMongoDB);
-    }
+    importFile.addEventListener('change', () => {
+        if (importFile.files.length > 0) {
+            handleImportFile(importFile.files[0]);
+        }
+    });
 
     // PDF file selection
     document.getElementById('browseResumeBtn').addEventListener('click', function () {
@@ -90,125 +109,152 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 });
 
-// Check and initialize MongoDB configuration
-function checkMongoDBConfig() {
-    chrome.storage.local.get(['mongoConfig', 'mongodbEnabled'], function (data) {
-        mongoConfig = data.mongoConfig;
-        mongodbEnabled = data.mongodbEnabled || false;
+// Update storage usage information
+function updateStorageInfo() {
+    const storageInfo = document.getElementById('storageInfo');
+    storageInfo.textContent = 'Calculating storage usage...';
 
-        // Update UI based on the configuration
-        const enableMongoSync = document.getElementById('enableMongoSync');
-        enableMongoSync.checked = mongodbEnabled;
+    chrome.storage.local.getBytesInUse(null, function (bytesUsed) {
+        let usageText = '';
 
-        const mongoConfigForm = document.getElementById('mongoConfigForm');
-        mongoConfigForm.style.display = mongodbEnabled ? 'block' : 'none';
-
-        // Show Sync Now button if MongoDB is enabled
-        const syncNowBtn = document.getElementById('syncNowBtn');
-        if (syncNowBtn) {
-            syncNowBtn.style.display = mongodbEnabled ? 'inline-block' : 'none';
+        if (bytesUsed < 1024) {
+            usageText = `${bytesUsed} bytes used`;
+        } else if (bytesUsed < 1048576) {
+            usageText = `${(bytesUsed / 1024).toFixed(2)} KB used`;
+        } else {
+            usageText = `${(bytesUsed / 1048576).toFixed(2)} MB used`;
         }
 
-        // Pre-fill configuration fields if available
-        if (mongoConfig) {
-            document.getElementById('mongoUri').value = mongoConfig.mongoUri || '';
-            document.getElementById('dbName').value = mongoConfig.dbName || '';
-            document.getElementById('collectionName').value = mongoConfig.collectionName || '';
-            document.getElementById('apiKey').value = mongoConfig.apiKey || '';
-            document.getElementById('dataApiUrl').value = mongoConfig.dataApiUrl || '';
-        }
+        // Chrome storage limit is 5MB
+        const percentUsed = (bytesUsed / 5242880) * 100;
+        usageText += ` (${percentUsed.toFixed(1)}% of 5MB limit)`;
+
+        storageInfo.textContent = usageText;
     });
 }
 
-// Save MongoDB configuration
-function saveMongoDBConfig() {
-    const mongoUri = document.getElementById('mongoUri').value.trim();
-    const dbName = document.getElementById('dbName').value.trim();
-    const collectionName = document.getElementById('collectionName').value.trim();
-    const apiKey = document.getElementById('apiKey').value.trim();
-    const dataApiUrl = document.getElementById('dataApiUrl').value.trim();
+// Create full backup including PDF files
+function createFullBackup() {
+    const fullBackupInfo = document.getElementById('fullBackupInfo');
+    fullBackupInfo.textContent = 'Creating backup...';
+    fullBackupInfo.style.display = 'block';
 
-    // Validate configuration
-    if (!mongoUri || !dbName || !collectionName || !apiKey || !dataApiUrl) {
-        const configStatus = document.getElementById('configStatus');
-        configStatus.textContent = 'Please fill in all MongoDB configuration fields';
-        configStatus.className = 'config-status error';
-        configStatus.style.display = 'block';
-        return;
-    }
+    // Get all data from storage
+    chrome.storage.local.get(null, function (data) {
+        // Create backup object with version info
+        const backup = {
+            version: '1.0',
+            date: new Date().toISOString(),
+            type: 'full',
+            data: data
+        };
 
-    // Save configuration
-    const newMongoConfig = {
-        mongoUri,
-        dbName,
-        collectionName,
-        apiKey,
-        dataApiUrl
-    };
+        // Convert to JSON
+        const backupJson = JSON.stringify(backup);
 
-    chrome.storage.local.set({
-        'mongoConfig': newMongoConfig,
-        'mongodbEnabled': true
-    }, function () {
-        mongoConfig = newMongoConfig;
-        mongodbEnabled = true;
+        // Create download
+        const blob = new Blob([backupJson], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const date = new Date().toISOString().slice(0, 10);
 
-        // Show success message
-        const configStatus = document.getElementById('configStatus');
-        configStatus.textContent = 'MongoDB configuration saved successfully';
-        configStatus.className = 'config-status success';
-        configStatus.style.display = 'block';
-
-        // Show Sync Now button
-        const syncNowBtn = document.getElementById('syncNowBtn');
-        if (syncNowBtn) {
-            syncNowBtn.style.display = 'inline-block';
-        }
-
-        // Test connection automatically
-        testMongoDBConnection();
-    });
-}
-
-// Test MongoDB connection
-function testMongoDBConnection() {
-    const configStatus = document.getElementById('configStatus');
-    configStatus.textContent = 'Testing connection...';
-    configStatus.className = 'config-status';
-    configStatus.style.display = 'block';
-
-    if (!mongoConfig) {
-        configStatus.textContent = 'Please save configuration first';
-        configStatus.className = 'config-status error';
-        return;
-    }
-
-    // Make a simple ping request to the Data API
-    fetch(mongoConfig.dataApiUrl + '/action/findOne', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'api-key': mongoConfig.apiKey
-        },
-        body: JSON.stringify({
-            dataSource: 'Cluster0', // This is typically the default cluster name
-            database: mongoConfig.dbName,
-            collection: mongoConfig.collectionName,
-            filter: { _test: true }
-        })
-    })
-        .then(response => {
-            if (response.ok) {
-                configStatus.textContent = 'Connection successful!';
-                configStatus.className = 'config-status success';
+        chrome.downloads.download({
+            url: url,
+            filename: `resume_tracker_backup_${date}.rsbak`,
+            saveAs: true
+        }, function (downloadId) {
+            if (chrome.runtime.lastError) {
+                fullBackupInfo.textContent = 'Error creating backup: ' + chrome.runtime.lastError.message;
             } else {
-                throw new Error('Connection failed with status: ' + response.status);
+                fullBackupInfo.textContent = 'Backup created successfully!';
             }
-        })
-        .catch(error => {
-            configStatus.textContent = 'Connection failed: ' + error.message;
-            configStatus.className = 'config-status error';
         });
+    });
+}
+
+// Export just application data (no PDFs)
+function exportDataOnly() {
+    // Get just the applications data
+    chrome.storage.local.get(['applications', 'resumes'], function (data) {
+        // Create backup object with version info but without PDF data
+        const backup = {
+            version: '1.0',
+            date: new Date().toISOString(),
+            type: 'data_only',
+            data: {
+                applications: data.applications || [],
+                resumes: data.resumes ? data.resumes.map(resume => {
+                    // Keep resume metadata but remove PDF data
+                    return {
+                        id: resume.id,
+                        filename: resume.filename,
+                        title: resume.title,
+                        dateAdded: resume.dateAdded,
+                        notes: resume.notes
+                    };
+                }) : []
+            }
+        };
+
+        // Convert to JSON
+        const backupJson = JSON.stringify(backup);
+
+        // Create download
+        const blob = new Blob([backupJson], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const date = new Date().toISOString().slice(0, 10);
+
+        chrome.downloads.download({
+            url: url,
+            filename: `resume_tracker_data_${date}.json`,
+            saveAs: true
+        });
+    });
+}
+
+// Handle import of backup file
+function handleImportFile(file) {
+    const importStatus = document.getElementById('importStatus');
+    importStatus.textContent = 'Reading backup file...';
+    importStatus.style.display = 'block';
+
+    const reader = new FileReader();
+    
+    reader.onload = function(e) {
+        try {
+            const backup = JSON.parse(e.target.result);
+            
+            // Verify it's a valid backup
+            if (!backup.version || !backup.data) {
+                throw new Error('Invalid backup file format');
+            }
+            
+            // Confirm with user before overwriting data
+            if (confirm('This will overwrite your current data. Continue?')) {
+                // Set the data to storage
+                chrome.storage.local.set(backup.data, function() {
+                    if (chrome.runtime.lastError) {
+                        importStatus.textContent = 'Error: ' + chrome.runtime.lastError.message;
+                    } else {
+                        importStatus.textContent = 'Backup restored successfully!';
+                        // Reload the UI to show the imported data
+                        loadResumes();
+                        loadEntries();
+                        updateStorageInfo();
+                    }
+                });
+            } else {
+                importStatus.textContent = 'Import cancelled.';
+            }
+        } catch (error) {
+            importStatus.textContent = 'Error: ' + error.message;
+        }
+    };
+    
+    reader.onerror = function() {
+        importStatus.textContent = 'Error reading file.';
+    };
+    
+    reader.readAsText(file);
 }
 
 // Load resumes from storage
@@ -227,18 +273,18 @@ function loadResumes() {
                 const item = document.createElement('div');
                 item.className = 'resume-item';
                 item.innerHTML = `
-          <div class="resume-details">
-            <div class="resume-name">${resume.name}</div>
-            <div class="resume-filename">${resume.filename}</div>
-            <div class="${resume.pdfData ? 'upload-status has-pdf' : 'upload-status no-pdf'}">
-              ${resume.pdfData ? 'PDF stored locally' : 'No PDF stored'}
+            <div class="resume-details">
+              <div class="resume-name">${resume.name}</div>
+              <div class="resume-filename">${resume.filename}</div>
+              <div class="${resume.pdfData ? 'upload-status has-pdf' : 'upload-status no-pdf'}">
+                ${resume.pdfData ? 'PDF stored locally' : 'No PDF stored'}
+              </div>
             </div>
-          </div>
-          <div class="resume-actions">
-            ${resume.pdfData ? '<button class="view-btn" data-index="' + index + '">View PDF</button>' : ''}
-            <button class="delete-btn" data-index="${index}">×</button>
-          </div>
-        `;
+            <div class="resume-actions">
+              ${resume.pdfData ? '<button class="view-btn" data-index="' + index + '">View PDF</button>' : ''}
+              <button class="delete-btn" data-index="${index}">×</button>
+            </div>
+          `;
                 resumeList.appendChild(item);
             });
 
@@ -281,12 +327,12 @@ function addResume() {
     const fileInput = document.getElementById('newResumePdf');
 
     if (!newResumeName) {
-        alert('Please enter a resume name');
+        showNotification('Please enter a resume name', 'error');
         return;
     }
 
     if (!newResumeFilename) {
-        alert('Please enter a filename or select a PDF');
+        showNotification('Please enter a filename or select a PDF', 'error');
         return;
     }
 
@@ -303,7 +349,8 @@ function addResume() {
         id: newResumeId,
         name: newResumeName,
         filename: newResumeFilename,
-        pdfData: null
+        pdfData: null,
+        dateAdded: new Date().toISOString()
     };
 
     // If PDF file is selected, read and store it
@@ -327,7 +374,7 @@ function addResume() {
         };
 
         reader.onerror = function () {
-            alert('Error reading the PDF file');
+            showNotification('Error reading the PDF file', 'error');
             document.getElementById('uploadProgress').style.display = 'none';
 
             // Still save the resume without PDF data
@@ -359,6 +406,9 @@ function saveResumeToStorage(newResume) {
             document.getElementById('newResumePdf').value = '';
             document.getElementById('uploadProgress').style.display = 'none';
 
+            // Show success notification
+            showNotification('Resume added successfully');
+
             // Reload resume list
             loadResumes();
         });
@@ -367,6 +417,10 @@ function saveResumeToStorage(newResume) {
 
 // Delete a resume
 function deleteResume(index) {
+    if (!confirm('Are you sure you want to delete this resume?')) {
+        return;
+    }
+
     chrome.storage.local.get('resumes', function (data) {
         const resumes = data.resumes || [];
 
@@ -377,6 +431,7 @@ function deleteResume(index) {
         chrome.storage.local.set({ 'resumes': resumes }, function () {
             // Reload resume list
             loadResumes();
+            showNotification('Resume deleted');
         });
     });
 }
@@ -391,19 +446,22 @@ function viewResumePdf(index) {
             // Open the PDF in a new tab
             chrome.tabs.create({ url: resume.pdfData });
         } else {
-            alert('No PDF file available for this resume');
+            showNotification('No PDF file available for this resume', 'error');
         }
     });
 }
 
 // Clear all resumes
 function clearResumes() {
-    if (confirm('Are you sure you want to clear all resumes?')) {
-        chrome.storage.local.set({ 'resumes': [] }, function () {
-            // Reload resume list
-            loadResumes();
-        });
+    if (!confirm('Are you sure you want to clear all resumes? This cannot be undone.')) {
+        return;
     }
+
+    chrome.storage.local.set({ 'resumes': [] }, function () {
+        // Reload resume list
+        loadResumes();
+        showNotification('All resumes cleared');
+    });
 }
 
 // Save application entry
@@ -412,15 +470,22 @@ function saveEntry() {
     const siteName = document.getElementById('siteName').value;
     const resumeId = document.getElementById('resumeSelect').value;
     const jobTitle = document.getElementById('jobTitle').value;
+    const status = document.getElementById('applicationStatus').value;
+    const tagsInput = document.getElementById('jobTags').value;
+
+    // Process tags
+    const tags = tagsInput.split(',')
+        .map(tag => tag.trim())
+        .filter(tag => tag.length > 0);
 
     // Validate required fields
     if (!url) {
-        alert('URL is required');
+        showNotification('URL is required', 'error');
         return;
     }
 
     if (!resumeId) {
-        alert('Please select a resume');
+        showNotification('Please select a resume', 'error');
         return;
     }
 
@@ -430,7 +495,7 @@ function saveEntry() {
         const selectedResume = resumes.find(r => r.id === resumeId);
 
         if (!selectedResume) {
-            alert('Selected resume not found');
+            showNotification('Selected resume not found', 'error');
             return;
         }
 
@@ -444,8 +509,18 @@ function saveEntry() {
             resumeName: selectedResume.name,
             resumeFilename: selectedResume.filename,
             job: jobTitle,
+            status: status,
+            tags: tags,
             date: new Date().toISOString(),
-            synced: false
+            dateApplied: new Date().toISOString(),
+            lastUpdated: new Date().toISOString(),
+            notes: '',
+            statusHistory: [
+                {
+                    status: status,
+                    date: new Date().toISOString()
+                }
+            ]
         };
 
         // Save entry
@@ -463,11 +538,6 @@ function saveEntry() {
                     successMsg.style.display = 'none';
                 }, 3000);
 
-                // Try to sync to MongoDB if enabled
-                if (mongodbEnabled && mongoConfig) {
-                    syncEntryToMongoDB(entry);
-                }
-
                 // Switch to view tab
                 document.querySelector('.tab[data-tab="view"]').click();
 
@@ -478,144 +548,11 @@ function saveEntry() {
     });
 }
 
-// Sync a single entry to MongoDB
-function syncEntryToMongoDB(entry) {
-    if (!mongodbEnabled || !mongoConfig) return;
-
-    const entryForSync = {
-        ...entry,
-        _id: entry.id // MongoDB requires an _id field
-    };
-
-    // Remove PDF data from the synced entry
-    if (entryForSync.pdfData) {
-        delete entryForSync.pdfData;
-    }
-
-    fetch(mongoConfig.dataApiUrl + '/action/updateOne', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'api-key': mongoConfig.apiKey
-        },
-        body: JSON.stringify({
-            dataSource: 'Cluster0',
-            database: mongoConfig.dbName,
-            collection: mongoConfig.collectionName,
-            filter: { _id: entry.id },
-            update: { $set: entryForSync },
-            upsert: true
-        })
-    })
-        .then(response => response.json())
-        .then(data => {
-            if (data.matchedCount > 0 || data.upsertedId) {
-                // Update the entry in local storage to mark as synced
-                chrome.storage.local.get('entries', function (storageData) {
-                    const entries = storageData.entries || [];
-                    const entryIndex = entries.findIndex(e => e.id === entry.id);
-
-                    if (entryIndex >= 0) {
-                        entries[entryIndex].synced = true;
-                        chrome.storage.local.set({ 'entries': entries }, function () {
-                            // Reload entries to update the UI
-                            loadEntries();
-                        });
-                    }
-                });
-            }
-        })
-        .catch(error => {
-            console.error('Error syncing entry to MongoDB:', error);
-        });
-}
-
-// Sync all entries to MongoDB
-function syncToMongoDB() {
-    if (!mongodbEnabled || !mongoConfig) {
-        alert('MongoDB sync is not configured. Please go to Settings.');
-        return;
-    }
-
-    const configStatus = document.getElementById('configStatus');
-    if (configStatus) {
-        configStatus.textContent = 'Syncing entries to MongoDB...';
-        configStatus.className = 'config-status';
-        configStatus.style.display = 'block';
-    }
-
-    chrome.storage.local.get('entries', function (data) {
-        const entries = data.entries || [];
-        const unsyncedEntries = entries.filter(entry => !entry.synced);
-
-        if (unsyncedEntries.length === 0) {
-            if (configStatus) {
-                configStatus.textContent = 'All entries already synced!';
-                configStatus.className = 'config-status success';
-            }
-            return;
-        }
-
-        // Create a deep copy of entries without PDF data
-        const entriesForSync = unsyncedEntries.map(entry => {
-            const entryCopy = { ...entry, _id: entry.id };
-            if (entryCopy.pdfData) {
-                delete entryCopy.pdfData;
-            }
-            return entryCopy;
-        });
-
-        // Use insertMany for bulk operation
-        fetch(mongoConfig.dataApiUrl + '/action/insertMany', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'api-key': mongoConfig.apiKey
-            },
-            body: JSON.stringify({
-                dataSource: 'Cluster0',
-                database: mongoConfig.dbName,
-                collection: mongoConfig.collectionName,
-                documents: entriesForSync
-            })
-        })
-            .then(response => response.json())
-            .then(data => {
-                if (data.insertedIds && data.insertedIds.length > 0) {
-                    // Update all entries to mark as synced
-                    const updatedEntries = entries.map(entry => {
-                        if (!entry.synced) {
-                            return { ...entry, synced: true };
-                        }
-                        return entry;
-                    });
-
-                    chrome.storage.local.set({ 'entries': updatedEntries }, function () {
-                        // Show success message
-                        if (configStatus) {
-                            configStatus.textContent = `Successfully synced ${data.insertedIds.length} entries!`;
-                            configStatus.className = 'config-status success';
-                        }
-
-                        // Reload entries to update the UI
-                        loadEntries();
-                    });
-                }
-            })
-            .catch(error => {
-                console.error('Error syncing entries to MongoDB:', error);
-                if (configStatus) {
-                    configStatus.textContent = 'Sync failed: ' + error.message;
-                    configStatus.className = 'config-status error';
-                }
-            });
-    });
-}
-
 // Load entries from storage
-function loadEntries(filter = '') {
-    chrome.storage.local.get('entries', function (data) {
+function loadEntries(filter = '', tagFilter = null) {
+    chrome.storage.local.get(['entries', 'resumes'], function (data) {
         const entries = data.entries || [];
+        const resumes = data.resumes || [];
 
         // Filter entries if needed
         let filteredEntries = entries;
@@ -629,8 +566,56 @@ function loadEntries(filter = '') {
             );
         }
 
+        // Apply tag filter if provided
+        if (tagFilter) {
+            filteredEntries = filteredEntries.filter(entry =>
+                entry.tags && entry.tags.includes(tagFilter)
+            );
+        }
+
         // Sort by date, newest first
         filteredEntries.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+        // Collect all unique tags for the tag filter
+        const allTags = new Set();
+        entries.forEach(entry => {
+            if (entry.tags && Array.isArray(entry.tags)) {
+                entry.tags.forEach(tag => allTags.add(tag));
+            }
+        });
+
+        // Populate tag filter container
+        const tagsContainer = document.getElementById('tagsContainer');
+        tagsContainer.innerHTML = '';
+
+        if (allTags.size > 0) {
+            Array.from(allTags).sort().forEach(tag => {
+                const tagElement = document.createElement('span');
+                tagElement.className = 'tag tag-filter';
+                if (tag === tagFilter) {
+                    tagElement.classList.add('active');
+                }
+                tagElement.textContent = tag;
+                tagElement.addEventListener('click', () => {
+                    const newFilter = tag === tagFilter ? null : tag;
+                    loadEntries(filter, newFilter);
+                });
+                tagsContainer.appendChild(tagElement);
+            });
+
+            // Add "Clear filters" tag if a tag filter is active
+            if (tagFilter) {
+                const clearTag = document.createElement('span');
+                clearTag.className = 'tag tag-filter';
+                clearTag.style.backgroundColor = '#ffebee';
+                clearTag.style.color = '#c62828';
+                clearTag.textContent = 'Clear filters';
+                clearTag.addEventListener('click', () => {
+                    loadEntries(filter);
+                });
+                tagsContainer.appendChild(clearTag);
+            }
+        }
 
         // Populate entries table
         const entriesBody = document.getElementById('entriesBody');
@@ -638,44 +623,55 @@ function loadEntries(filter = '') {
 
         if (filteredEntries.length === 0) {
             const row = document.createElement('tr');
-            row.innerHTML = '<td colspan="4">No applications found</td>';
+            row.innerHTML = '<td colspan="5">No applications found</td>';
             entriesBody.appendChild(row);
         } else {
             filteredEntries.forEach((entry, index) => {
-                // Look up the resume to check if it has PDF data
-                chrome.storage.local.get('resumes', function (resumeData) {
-                    const resumes = resumeData.resumes || [];
-                    const resume = resumes.find(r => r.id === entry.resumeId);
-                    const hasPdf = resume && resume.pdfData;
+                // Find the associated resume
+                const resume = resumes.find(r => r.id === entry.resumeId);
+                const hasPdf = resume && resume.pdfData;
 
-                    const row = document.createElement('tr');
-                    row.innerHTML = `
-            <td><a href="${entry.url}" target="_blank">${entry.site || 'Unknown'}</a></td>
-            <td>${entry.job || 'N/A'}</td>
+                // Format date
+                const date = new Date(entry.date);
+                const formattedDate = date.toLocaleDateString();
+
+                // Create status badge class
+                const statusClass = `status-badge status-${entry.status.toLowerCase()}`;
+
+                const row = document.createElement('tr');
+                row.innerHTML = `
+            <td>${formattedDate}</td>
+            <td>
+              <div><a href="${entry.url}" target="_blank">${entry.site || 'Unknown'}</a></div>
+              <div>${entry.job || 'N/A'}</div>
+              ${entry.tags && entry.tags.length > 0 ?
+                        `<div class="status-badges">
+                  ${entry.tags.map(tag => `<span class="tag">${tag}</span>`).join('')}
+                </div>` : ''}
+            </td>
             <td>
               <div>${entry.resumeName || 'Unknown'}</div>
               <div class="file-name">${entry.resumeFilename}</div>
               ${hasPdf ? '<button class="view-btn view-entry-pdf" data-resume-id="' + entry.resumeId + '">View PDF</button>' : ''}
-              ${mongodbEnabled ? `<span class="sync-indicator ${entry.synced ? 'synced' : 'not-synced'}">${entry.synced ? 'Synced' : 'Not synced'}</span>` : ''}
             </td>
+            <td><span class="${statusClass}">${entry.status}</span></td>
             <td><button class="delete-btn" data-index="${entries.indexOf(entry)}">×</button></td>
           `;
-                    entriesBody.appendChild(row);
+                entriesBody.appendChild(row);
 
-                    // Add event listeners to delete buttons
-                    row.querySelector('.delete-btn').addEventListener('click', function () {
-                        deleteEntry(parseInt(this.getAttribute('data-index')));
-                    });
-
-                    // Add event listeners to view PDF buttons
-                    const viewBtn = row.querySelector('.view-entry-pdf');
-                    if (viewBtn) {
-                        viewBtn.addEventListener('click', function () {
-                            const resumeId = this.getAttribute('data-resume-id');
-                            viewEntryPdf(resumeId);
-                        });
-                    }
+                // Add event listeners to delete buttons
+                row.querySelector('.delete-btn').addEventListener('click', function () {
+                    deleteEntry(parseInt(this.getAttribute('data-index')));
                 });
+
+                // Add event listeners to view PDF buttons
+                const viewBtn = row.querySelector('.view-entry-pdf');
+                if (viewBtn) {
+                    viewBtn.addEventListener('click', function () {
+                        const resumeId = this.getAttribute('data-resume-id');
+                        viewEntryPdf(resumeId);
+                    });
+                }
             });
         }
     });
@@ -691,7 +687,7 @@ function viewEntryPdf(resumeId) {
             // Open the PDF in a new tab
             chrome.tabs.create({ url: resume.pdfData });
         } else {
-            alert('No PDF file available for this resume');
+            showNotification('No PDF file available for this resume', 'error');
         }
     });
 }
@@ -704,84 +700,37 @@ function searchEntries() {
 
 // Delete an entry
 function deleteEntry(index) {
+    if (!confirm('Are you sure you want to delete this application entry?')) {
+        return;
+    }
+
     chrome.storage.local.get('entries', function (data) {
         const entries = data.entries || [];
-        const entry = entries[index];
 
         // Remove entry at index
         entries.splice(index, 1);
 
         // Save updated list
         chrome.storage.local.set({ 'entries': entries }, function () {
-            // If MongoDB sync is enabled, also delete from MongoDB
-            if (mongodbEnabled && mongoConfig && entry && entry.id) {
-                deleteEntryFromMongoDB(entry.id);
-            }
-
             // Reload entries
             const searchTerm = document.getElementById('searchInput').value.trim();
             loadEntries(searchTerm);
+            showNotification('Entry deleted');
         });
     });
 }
 
-// Delete an entry from MongoDB
-function deleteEntryFromMongoDB(entryId) {
-    if (!mongodbEnabled || !mongoConfig) return;
-
-    fetch(mongoConfig.dataApiUrl + '/action/deleteOne', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'api-key': mongoConfig.apiKey
-        },
-        body: JSON.stringify({
-            dataSource: 'Cluster0',
-            database: mongoConfig.dbName,
-            collection: mongoConfig.collectionName,
-            filter: { _id: entryId }
-        })
-    })
-        .catch(error => {
-            console.error('Error deleting entry from MongoDB:', error);
-        });
-}
-
 // Clear all entries
 function clearEntries() {
-    if (confirm('Are you sure you want to clear all application entries?')) {
-        chrome.storage.local.set({ 'entries': [] }, function () {
-            // If MongoDB sync is enabled, also clear the collection
-            if (mongodbEnabled && mongoConfig) {
-                clearEntriesFromMongoDB();
-            }
-
-            // Reload entries
-            loadEntries();
-        });
+    if (!confirm('Are you sure you want to clear all application entries? This cannot be undone.')) {
+        return;
     }
-}
 
-// Clear all entries from MongoDB
-function clearEntriesFromMongoDB() {
-    if (!mongodbEnabled || !mongoConfig) return;
-
-    fetch(mongoConfig.dataApiUrl + '/action/deleteMany', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'api-key': mongoConfig.apiKey
-        },
-        body: JSON.stringify({
-            dataSource: 'Cluster0',
-            database: mongoConfig.dbName,
-            collection: mongoConfig.collectionName,
-            filter: {}
-        })
-    })
-        .catch(error => {
-            console.error('Error clearing entries from MongoDB:', error);
-        });
+    chrome.storage.local.set({ 'entries': [] }, function () {
+        // Reload entries
+        loadEntries();
+        showNotification('All entries cleared');
+    });
 }
 
 // Export entries to CSV
@@ -790,16 +739,17 @@ function exportEntries() {
         const entries = data.entries || [];
 
         if (entries.length === 0) {
-            alert('No entries to export');
+            showNotification('No entries to export', 'error');
             return;
         }
 
         // Create CSV header
-        let csv = 'Date,Site,Job Title,Resume Name,Resume Filename,Synced\n';
+        let csv = 'Date,Site,Job Title,Resume Name,Resume Filename,Status,Tags,URL\n';
 
         // Add each entry as a row
         entries.forEach(entry => {
             const date = new Date(entry.date).toLocaleDateString();
+            const tags = entry.tags ? entry.tags.join('; ') : '';
 
             // Escape commas in fields
             const row = [
@@ -808,13 +758,15 @@ function exportEntries() {
                 `"${(entry.job || 'N/A').replace(/"/g, '""')}"`,
                 `"${(entry.resumeName || 'Unknown').replace(/"/g, '""')}"`,
                 `"${entry.resumeFilename.replace(/"/g, '""')}"`,
-                entry.synced ? 'Yes' : 'No'
+                entry.status,
+                `"${tags}"`,
+                `"${entry.url.replace(/"/g, '""')}"`
             ];
 
             csv += row.join(',') + '\n';
         });
 
-        // Create download link
+        // Create download
         const blob = new Blob([csv], { type: 'text/csv' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -826,7 +778,20 @@ function exportEntries() {
         // Clean up
         setTimeout(() => {
             document.body.removeChild(a);
-            window.URL.revoObjectURL(url);
-        }, 0);
+            URL.revoObjectURL(url);
+        }, 1000);
     });
+}
+
+// Show notification
+function showNotification(message, type = 'success') {
+    const notification = document.getElementById('notification');
+    notification.textContent = message;
+    notification.style.backgroundColor = type === 'success' ? '#4caf50' : '#f44336';
+    notification.classList.add('show');
+
+    // Hide after 3 seconds
+    setTimeout(() => {
+        notification.classList.remove('show');
+    }, 3000);
 }
