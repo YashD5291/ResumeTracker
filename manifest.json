@@ -1,21 +1,12 @@
 {
     "manifest_version": 3,
-    "name": "Resume Tracker",
-    "version": "1.1",
-    "description": "Automatically tracks which resume you upload to job application sites",
+    "name": "Simple Resume Tracker",
+    "version": "1.0",
+    "description": "Manually track which resume you used for each job application",
     "permissions": [
         "storage",
         "activeTab",
-        "webRequest"
-    ],
-    "host_permissions": [
-        "*://*.dice.com/*",
-        "*://www.dice.com/*",
-        "*://*.indeed.com/*",
-        "*://*.linkedin.com/*",
-        "*://*.monster.com/*",
-        "*://*.glassdoor.com/*",
-        "*://*.ziprecruiter.com/*"
+        "tabs"
     ],
     "action": {
         "default_popup": "popup.html",
@@ -24,20 +15,6 @@
             "48": "images/icon48.png",
             "128": "images/icon128.png"
         }
-    },
-    "content_scripts": [
-        {
-            "matches": [
-                "<all_urls>"
-            ],
-            "js": [
-                "content.js"
-            ],
-            "run_at": "document_idle"
-        }
-    ],
-    "background": {
-        "service_worker": "background.js"
     },
     "icons": {
         "16": "images/icon16.png",

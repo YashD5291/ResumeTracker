@@ -2,34 +2,45 @@
 <html>
 
 <head>
-    <title>Resume Tracker</title>
+    <title>Simple Resume Tracker</title>
     <meta charset="UTF-8">
     <style>
         body {
             font-family: Arial, sans-serif;
-            width: 800px;
-            margin: 0;
+            width: 400px;
             padding: 16px;
+            margin: 0;
         }
 
         h1 {
-            color: #333;
-            font-size: 20px;
+            font-size: 18px;
             margin-top: 0;
-        }
-
-        .search-box {
             margin-bottom: 16px;
-            display: flex;
-            align-items: center;
         }
 
+        .section {
+            margin-bottom: 20px;
+        }
+
+        .section-title {
+            font-size: 16px;
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+
+        select,
         input[type="text"] {
-            flex-grow: 1;
+            width: 100%;
             padding: 8px;
+            margin-bottom: 12px;
             border: 1px solid #ddd;
             border-radius: 4px;
-            margin-right: 8px;
+            box-sizing: border-box;
+        }
+
+        .button-group {
+            display: flex;
+            justify-content: space-between;
         }
 
         button {
@@ -45,8 +56,97 @@
             background-color: #3367d6;
         }
 
-        .add-btn {
-            margin-left: auto;
+        button.secondary {
+            background-color: #f1f1f1;
+            color: #333;
+        }
+
+        button.secondary:hover {
+            background-color: #e1e1e1;
+        }
+
+        #saveEntry {
+            width: 100%;
+            margin-top: 16px;
+        }
+
+        .resume-list {
+            max-height: 160px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin-bottom: 12px;
+        }
+
+        .resume-item {
+            padding: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #eee;
+        }
+
+        .resume-item:last-child {
+            border-bottom: none;
+        }
+
+        .resume-name {
+            flex-grow: 1;
+        }
+
+        .delete-btn {
+            background-color: #f44336;
+            color: white;
+            padding: 2px 6px;
+            font-size: 12px;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+
+        .delete-btn:hover {
+            background-color: #d32f2f;
+        }
+
+        .tabs {
+            display: flex;
+            margin-bottom: 16px;
+            border-bottom: 1px solid #ddd;
+        }
+
+        .tab {
+            padding: 8px 16px;
+            cursor: pointer;
+            background-color: #f1f1f1;
+            border: 1px solid #ddd;
+            border-bottom: none;
+            margin-right: 4px;
+            border-top-left-radius: 4px;
+            border-top-right-radius: 4px;
+        }
+
+        .tab.active {
+            background-color: white;
+            border-bottom: 1px solid white;
+            margin-bottom: -1px;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .search-box {
+            margin-bottom: 12px;
+        }
+
+        .search-box input {
+            width: 70%;
+            margin-right: 8px;
+            margin-bottom: 0;
         }
 
         table {
@@ -56,7 +156,7 @@
 
         th,
         td {
-            padding: 10px;
+            padding: 8px;
             text-align: left;
             border-bottom: 1px solid #ddd;
         }
@@ -65,226 +165,101 @@
             background-color: #f2f2f2;
         }
 
-        .status-applied {
-            color: blue;
-        }
-
-        .status-rejected {
-            color: red;
-        }
-
-        .status-interview {
-            color: green;
-        }
-
-        .action-buttons button {
-            margin-right: 5px;
-            padding: 3px 5px;
-            font-size: 12px;
-        }
-
-        .no-data {
-            text-align: center;
-            margin-top: 40px;
-            color: #666;
-        }
-
-        .bottom-buttons {
-            display: flex;
-            justify-content: space-between;
-            margin-top: 16px;
-        }
-
-        .modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.5);
-            z-index: 100;
-        }
-
-        .modal-content {
-            background-color: white;
-            width: 70%;
-            max-width: 600px;
-            margin: 100px auto;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-        }
-
-        .modal-title {
-            margin-top: 0;
-            font-size: 18px;
-        }
-
-        .form-group {
+        .entry-list {
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            border-radius: 4px;
             margin-bottom: 12px;
         }
 
-        .form-group label {
-            display: block;
-            margin-bottom: 4px;
+        .success-message {
+            color: green;
             font-weight: bold;
-        }
-
-        .form-group input,
-        .form-group select {
-            width: 100%;
-            padding: 8px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-        }
-
-        .modal-buttons {
-            margin-top: 16px;
-            text-align: right;
-        }
-
-        .modal-buttons button {
-            margin-left: 8px;
-        }
-
-        .close-btn {
-            float: right;
-            font-size: 20px;
-            cursor: pointer;
+            text-align: center;
+            margin-top: 8px;
+            display: none;
         }
     </style>
 </head>
 
 <body>
-    <h1>Resume Tracker Dashboard</h1>
+    <h1>Simple Resume Tracker</h1>
 
-    <div class="search-box">
-        <input type="text" id="searchInput" placeholder="Search by company or job title...">
-        <button id="searchBtn">Search</button>
-        <button id="clearSearchBtn">Clear</button>
-        <button id="addManualBtn" class="add-btn">+ Add Manually</button>
+    <div class="tabs">
+        <div class="tab active" data-tab="track">Track Application</div>
+        <div class="tab" data-tab="manage">Manage Resumes</div>
+        <div class="tab" data-tab="view">View Entries</div>
     </div>
 
-    <table id="applicationsTable">
-        <thead>
-            <tr>
-                <th>Date Applied</th>
-                <th>Company</th>
-                <th>Position</th>
-                <th>Resume</th>
-                <th>Status</th>
-                <th>Actions</th>
-            </tr>
-        </thead>
-        <tbody id="applicationsBody">
-            <!-- Applications will be inserted here -->
-        </tbody>
-    </table>
+    <!-- Track Application Tab -->
+    <div id="trackTab" class="tab-content active">
+        <div class="section">
+            <div class="section-title">Current Website</div>
+            <input type="text" id="currentUrl" readonly>
+            <input type="text" id="siteName" placeholder="Company/Website Name (auto-detected)">
+        </div>
 
-    <div id="noDataMessage" class="no-data" style="display: none;">
-        No applications found. Start applying to jobs, and your resume uploads will appear here.
+        <div class="section">
+            <div class="section-title">Select Resume Used</div>
+            <select id="resumeSelect">
+                <option value="">-- Select a resume --</option>
+            </select>
+        </div>
+
+        <div class="section">
+            <div class="section-title">Job Details (Optional)</div>
+            <input type="text" id="jobTitle" placeholder="Job Title">
+        </div>
+
+        <button id="saveEntry">Save This Application</button>
+        <div id="saveSuccess" class="success-message">Application saved successfully!</div>
     </div>
 
-    <div class="bottom-buttons">
-        <button id="clearAllBtn">Clear All Data</button>
-        <button id="exportBtn">Export to CSV</button>
-    </div>
-
-    <!-- Add Application Modal -->
-    <div id="addModal" class="modal">
-        <div class="modal-content">
-            <span class="close-btn" id="closeAddModal">&times;</span>
-            <h2 class="modal-title">Add Application Manually</h2>
-
-            <div class="form-group">
-                <label for="manualCompany">Company Name</label>
-                <input type="text" id="manualCompany" placeholder="e.g., Google">
+    <!-- Manage Resumes Tab -->
+    <div id="manageTab" class="tab-content">
+        <div class="section">
+            <div class="section-title">Your Resume List</div>
+            <div id="resumeList" class="resume-list">
+                <!-- Resume items will be inserted here -->
             </div>
 
-            <div class="form-group">
-                <label for="manualJobTitle">Job Title</label>
-                <input type="text" id="manualJobTitle" placeholder="e.g., Software Engineer">
-            </div>
-
-            <div class="form-group">
-                <label for="manualResume">Resume File Name</label>
-                <input type="text" id="manualResume" placeholder="e.g., MyResume_v2.pdf">
-            </div>
-
-            <div class="form-group">
-                <label for="manualWebsite">Website URL (optional)</label>
-                <input type="text" id="manualWebsite" placeholder="e.g., https://careers.google.com/...">
-            </div>
-
-            <div class="form-group">
-                <label for="manualDate">Date Applied</label>
-                <input type="date" id="manualDate">
-            </div>
-
-            <div class="form-group">
-                <label for="manualStatus">Status</label>
-                <select id="manualStatus">
-                    <option value="Applied">Applied</option>
-                    <option value="Interview">Interview</option>
-                    <option value="Rejected">Rejected</option>
-                    <option value="Offer">Offer</option>
-                    <option value="Accepted">Accepted</option>
-                </select>
-            </div>
-
-            <div class="modal-buttons">
-                <button id="cancelAddBtn">Cancel</button>
-                <button id="saveAddBtn">Save</button>
+            <input type="text" id="newResume" placeholder="Enter new resume filename (e.g., Resume_Tech_v2.pdf)">
+            <div class="button-group">
+                <button id="addResume">Add Resume</button>
+                <button id="clearResumes" class="secondary">Clear All</button>
             </div>
         </div>
     </div>
 
-    <!-- Edit Application Modal -->
-    <div id="editModal" class="modal">
-        <div class="modal-content">
-            <span class="close-btn" id="closeEditModal">&times;</span>
-            <h2 class="modal-title">Edit Application</h2>
-
-            <div class="form-group">
-                <label for="editCompany">Company Name</label>
-                <input type="text" id="editCompany">
+    <!-- View Entries Tab -->
+    <div id="viewTab" class="tab-content">
+        <div class="section">
+            <div class="section-title">Search Applications</div>
+            <div class="search-box">
+                <input type="text" id="searchInput" placeholder="Search...">
+                <button id="searchBtn">Search</button>
             </div>
 
-            <div class="form-group">
-                <label for="editJobTitle">Job Title</label>
-                <input type="text" id="editJobTitle">
+            <div class="entry-list">
+                <table id="entriesTable">
+                    <thead>
+                        <tr>
+                            <th>Site</th>
+                            <th>Job</th>
+                            <th>Resume</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody id="entriesBody">
+                        <!-- Entries will be inserted here -->
+                    </tbody>
+                </table>
             </div>
 
-            <div class="form-group">
-                <label for="editResume">Resume File Name</label>
-                <input type="text" id="editResume">
-            </div>
-
-            <div class="form-group">
-                <label for="editWebsite">Website URL</label>
-                <input type="text" id="editWebsite">
-            </div>
-
-            <div class="form-group">
-                <label for="editDate">Date Applied</label>
-                <input type="date" id="editDate">
-            </div>
-
-            <div class="form-group">
-                <label for="editStatus">Status</label>
-                <select id="editStatus">
-                    <option value="Applied">Applied</option>
-                    <option value="Interview">Interview</option>
-                    <option value="Rejected">Rejected</option>
-                    <option value="Offer">Offer</option>
-                    <option value="Accepted">Accepted</option>
-                </select>
-            </div>
-
-            <div class="modal-buttons">
-                <button id="cancelEditBtn">Cancel</button>
-                <button id="saveEditBtn">Save</button>
+            <div class="button-group">
+                <button id="clearEntries" class="secondary">Clear All</button>
+                <button id="exportEntries">Export CSV</button>
             </div>
         </div>
     </div>
