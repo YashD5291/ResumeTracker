@@ -1,3 +1,4 @@
+/ popup.html
 <!DOCTYPE html>
 <html>
 
@@ -7,7 +8,7 @@
     <style>
         body {
             font-family: Arial, sans-serif;
-            width: 400px;
+            width: 450px;
             padding: 16px;
             margin: 0;
         }
@@ -29,7 +30,8 @@
         }
 
         select,
-        input[type="text"] {
+        input[type="text"],
+        input[type="file"] {
             width: 100%;
             padding: 8px;
             margin-bottom: 12px;
@@ -71,7 +73,7 @@
         }
 
         .resume-list {
-            max-height: 160px;
+            max-height: 200px;
             overflow-y: auto;
             border: 1px solid #ddd;
             border-radius: 4px;
@@ -79,11 +81,12 @@
         }
 
         .resume-item {
-            padding: 8px;
+            padding: 10px;
             display: flex;
             justify-content: space-between;
             align-items: center;
             border-bottom: 1px solid #eee;
+            flex-wrap: wrap;
         }
 
         .resume-item:last-child {
@@ -91,7 +94,14 @@
         }
 
         .resume-name {
-            flex-grow: 1;
+            font-weight: bold;
+        }
+
+        .resume-filename {
+            font-size: 0.9em;
+            color: #666;
+            width: 100%;
+            margin-top: 4px;
         }
 
         .delete-btn {
@@ -102,6 +112,7 @@
             border: none;
             border-radius: 3px;
             cursor: pointer;
+            margin-left: 10px;
         }
 
         .delete-btn:hover {
@@ -180,6 +191,37 @@
             margin-top: 8px;
             display: none;
         }
+
+        .form-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+
+        .form-row input[type="text"] {
+            flex-grow: 1;
+            margin-bottom: 0;
+        }
+
+        .pdf-preview {
+            max-width: 100px;
+            max-height: 100px;
+            margin-right: 10px;
+        }
+
+        .view-pdf-btn {
+            background-color: #4caf50;
+            padding: 2px 6px;
+            font-size: 12px;
+            margin-left: 5px;
+        }
+
+        .file-name {
+            font-style: italic;
+            font-size: 0.9em;
+            color: #666;
+            margin-top: 4px;
+        }
     </style>
 </head>
 
@@ -224,7 +266,15 @@
                 <!-- Resume items will be inserted here -->
             </div>
 
-            <input type="text" id="newResume" placeholder="Enter new resume filename (e.g., Resume_Tech_v2.pdf)">
+            <div class="section-title">Add New Resume</div>
+            <input type="text" id="newResumeName" placeholder="Resume name (e.g., Technical Resume v2)">
+            <div class="form-row">
+                <input type="text" id="newResumeFilename" placeholder="PDF filename (e.g., Resume_Tech_v2.pdf)">
+                <input type="file" id="newResumePdf" accept=".pdf" style="display: none;">
+                <button id="browseResumeBtn">Browse</button>
+            </div>
+            <div id="selectedFileName" class="file-name"></div>
+
             <div class="button-group">
                 <button id="addResume">Add Resume</button>
                 <button id="clearResumes" class="secondary">Clear All</button>

@@ -51,6 +51,19 @@ document.addEventListener('DOMContentLoaded', function () {
     document.getElementById('searchInput').addEventListener('input', searchEntries);
     document.getElementById('clearEntries').addEventListener('click', clearEntries);
     document.getElementById('exportEntries').addEventListener('click', exportEntries);
+
+    // PDF file selection
+    document.getElementById('browseResumeBtn').addEventListener('click', function () {
+        document.getElementById('newResumePdf').click();
+    });
+
+    document.getElementById('newResumePdf').addEventListener('change', function () {
+        if (this.files && this.files.length > 0) {
+            const file = this.files[0];
+            document.getElementById('selectedFileName').textContent = file.name;
+            document.getElementById('newResumeFilename').value = file.name;
+        }
+    });
 });
 
 // Load resumes from storage
@@ -69,8 +82,13 @@ function loadResumes() {
                 const item = document.createElement('div');
                 item.className = 'resume-item';
                 item.innerHTML = `
-            <span class="resume-name">${resume}</span>
-            <button class="delete-btn" data-index="${index}">×</button>
+            <div class="resume-details">
+              <div class="resume-name">${resume.name}</div>
+              <div class="resume-filename">${resume.filename}</div>
+            </div>
+            <div class="resume-actions">
+              <button class="delete-btn" data-index="${index}">×</button>
+            </div>
           `;
                 resumeList.appendChild(item);
             });
@@ -93,8 +111,8 @@ function loadResumes() {
         // Add resumes to dropdown
         resumes.forEach(resume => {
             const option = document.createElement('option');
-            option.value = resume;
-            option.textContent = resume;
+            option.value = resume.id;
+            option.textContent = `${resume.name} (${resume.filename})`;
             resumeSelect.appendChild(option);
         });
     });
@@ -102,30 +120,39 @@ function loadResumes() {
 
 // Save a new resume
 function addResume() {
-    const newResumeInput = document.getElementById('newResume');
-    const resumeName = newResumeInput.value.trim();
+    const newResumeName = document.getElementById('newResumeName').value.trim();
+    const newResumeFilename = document.getElementById('newResumeFilename').value.trim();
 
-    if (!resumeName) {
+    if (!newResumeName) {
         alert('Please enter a resume name');
+        return;
+    }
+
+    if (!newResumeFilename) {
+        alert('Please enter a filename or select a PDF');
         return;
     }
 
     chrome.storage.local.get('resumes', function (data) {
         const resumes = data.resumes || [];
 
-        // Check if resume already exists
-        if (resumes.includes(resumeName)) {
-            alert('This resume is already in your list');
-            return;
-        }
+        // Create unique ID for the resume
+        const newResumeId = 'resume_' + Date.now();
 
         // Add new resume
-        resumes.push(resumeName);
+        resumes.push({
+            id: newResumeId,
+            name: newResumeName,
+            filename: newResumeFilename
+        });
 
         // Save updated list
         chrome.storage.local.set({ 'resumes': resumes }, function () {
-            // Clear input field
-            newResumeInput.value = '';
+            // Clear input fields
+            document.getElementById('newResumeName').value = '';
+            document.getElementById('newResumeFilename').value = '';
+            document.getElementById('selectedFileName').textContent = '';
+            document.getElementById('newResumePdf').value = '';
 
             // Reload resume list
             loadResumes();
@@ -163,7 +190,7 @@ function clearResumes() {
 function saveEntry() {
     const url = document.getElementById('currentUrl').value;
     const siteName = document.getElementById('siteName').value;
-    const resumeName = document.getElementById('resumeSelect').value;
+    const resumeId = document.getElementById('resumeSelect').value;
     const jobTitle = document.getElementById('jobTitle').value;
 
     // Validate required fields
@@ -172,40 +199,53 @@ function saveEntry() {
         return;
     }
 
-    if (!resumeName) {
+    if (!resumeId) {
         alert('Please select a resume');
         return;
     }
 
-    // Create entry object
-    const entry = {
-        url: url,
-        site: siteName,
-        resume: resumeName,
-        job: jobTitle,
-        date: new Date().toISOString()
-    };
+    // Get resume details
+    chrome.storage.local.get('resumes', function (data) {
+        const resumes = data.resumes || [];
+        const selectedResume = resumes.find(r => r.id === resumeId);
 
-    // Save entry
-    chrome.storage.local.get('entries', function (data) {
-        const entries = data.entries || [];
-        entries.push(entry);
+        if (!selectedResume) {
+            alert('Selected resume not found');
+            return;
+        }
 
-        chrome.storage.local.set({ 'entries': entries }, function () {
-            // Show success message
-            const successMsg = document.getElementById('saveSuccess');
-            successMsg.style.display = 'block';
+        // Create entry object
+        const entry = {
+            url: url,
+            site: siteName,
+            resumeId: resumeId,
+            resumeName: selectedResume.name,
+            resumeFilename: selectedResume.filename,
+            job: jobTitle,
+            date: new Date().toISOString()
+        };
 
-            // Hide after 3 seconds
-            setTimeout(() => {
-                successMsg.style.display = 'none';
-            }, 3000);
+        // Save entry
+        chrome.storage.local.get('entries', function (data) {
+            const entries = data.entries || [];
+            entries.push(entry);
 
-            // Switch to view tab
-            document.querySelector('.tab[data-tab="view"]').click();
+            chrome.storage.local.set({ 'entries': entries }, function () {
+                // Show success message
+                const successMsg = document.getElementById('saveSuccess');
+                successMsg.style.display = 'block';
 
-            // Reload entries
-            loadEntries();
+                // Hide after 3 seconds
+                setTimeout(() => {
+                    successMsg.style.display = 'none';
+                }, 3000);
+
+                // Switch to view tab
+                document.querySelector('.tab[data-tab="view"]').click();
+
+                // Reload entries
+                loadEntries();
+            });
         });
     });
 }
@@ -222,7 +262,8 @@ function loadEntries(filter = '') {
             filteredEntries = entries.filter(entry =>
                 (entry.site || '').toLowerCase().includes(lowercaseFilter) ||
                 (entry.job || '').toLowerCase().includes(lowercaseFilter) ||
-                (entry.resume || '').toLowerCase().includes(lowercaseFilter)
+                (entry.resumeName || '').toLowerCase().includes(lowercaseFilter) ||
+                (entry.resumeFilename || '').toLowerCase().includes(lowercaseFilter)
             );
         }
 
@@ -243,8 +284,11 @@ function loadEntries(filter = '') {
                 row.innerHTML = `
             <td><a href="${entry.url}" target="_blank">${entry.site || 'Unknown'}</a></td>
             <td>${entry.job || 'N/A'}</td>
-            <td>${entry.resume}</td>
-            <td><button class="delete-btn" data-index="${index}">×</button></td>
+            <td>
+              <div>${entry.resumeName || 'Unknown'}</div>
+              <div class="file-name">${entry.resumeFilename}</div>
+            </td>
+            <td><button class="delete-btn" data-index="${entries.indexOf(entry)}">×</button></td>
           `;
                 entriesBody.appendChild(row);
             });
@@ -303,7 +347,7 @@ function exportEntries() {
         }
 
         // Create CSV header
-        let csv = 'Date,Site,Job Title,Resume,URL\n';
+        let csv = 'Date,Site,Job Title,Resume Name,Resume Filename,URL\n';
 
         // Add each entry as a row
         entries.forEach(entry => {
@@ -314,7 +358,8 @@ function exportEntries() {
                 date,
                 `"${(entry.site || 'Unknown').replace(/"/g, '""')}"`,
                 `"${(entry.job || 'N/A').replace(/"/g, '""')}"`,
-                `"${entry.resume.replace(/"/g, '""')}"`,
+                `"${(entry.resumeName || 'Unknown').replace(/"/g, '""')}"`,
+                `"${entry.resumeFilename.replace(/"/g, '""')}"`,
                 `"${entry.url.replace(/"/g, '""')}"`
             ];
 
