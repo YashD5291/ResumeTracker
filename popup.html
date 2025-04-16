@@ -1,9 +1,8 @@
-/ popup.html
 <!DOCTYPE html>
 <html>
 
 <head>
-    <title>Simple Resume Tracker</title>
+    <title>Resume Tracker</title>
     <meta charset="UTF-8">
     <style>
         body {
@@ -73,7 +72,7 @@
         }
 
         .resume-list {
-            max-height: 200px;
+            max-height: 300px;
             overflow-y: auto;
             border: 1px solid #ddd;
             border-radius: 4px;
@@ -104,6 +103,16 @@
             margin-top: 4px;
         }
 
+        .resume-details {
+            flex: 1;
+            min-width: 60%;
+        }
+
+        .resume-actions {
+            display: flex;
+            align-items: center;
+        }
+
         .delete-btn {
             background-color: #f44336;
             color: white;
@@ -117,6 +126,20 @@
 
         .delete-btn:hover {
             background-color: #d32f2f;
+        }
+
+        .view-btn {
+            background-color: #4caf50;
+            color: white;
+            padding: 2px 6px;
+            font-size: 12px;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+
+        .view-btn:hover {
+            background-color: #45a049;
         }
 
         .tabs {
@@ -209,75 +232,174 @@
             margin-right: 10px;
         }
 
-        .view-pdf-btn {
-            background-color: #4caf50;
-            padding: 2px 6px;
-            font-size: 12px;
-            margin-left: 5px;
-        }
-
         .file-name {
             font-style: italic;
             font-size: 0.9em;
             color: #666;
             margin-top: 4px;
         }
+
+        .upload-status {
+            margin-top: 4px;
+            font-size: 0.9em;
+        }
+
+        .has-pdf {
+            color: green;
+        }
+
+        .no-pdf {
+            color: #888;
+        }
+
+        .progress-bar {
+            width: 100%;
+            background-color: #f1f1f1;
+            height: 10px;
+            margin-top: 5px;
+            border-radius: 5px;
+            overflow: hidden;
+            display: none;
+        }
+
+        .progress {
+            height: 100%;
+            background-color: #4caf50;
+            width: 0%;
+            transition: width 0.3s;
+        }
+
+        .loading-spinner {
+            display: inline-block;
+            width: 15px;
+            height: 15px;
+            border: 2px solid rgba(0, 0, 0, 0.1);
+            border-radius: 50%;
+            border-top-color: #4285f4;
+            animation: spin 1s ease-in-out infinite;
+            margin-left: 5px;
+            vertical-align: middle;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .firebase-settings {
+            margin-bottom: 15px;
+            padding: 10px;
+            background-color: #f9f9f9;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        .firebase-settings h3 {
+            margin-top: 0;
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+
+        .setup-btn {
+            width: 100%;
+            margin-top: 10px;
+        }
+
+        .config-status {
+            margin-top: 8px;
+            padding: 8px;
+            border-radius: 4px;
+            text-align: center;
+        }
+
+        .config-status.success {
+            background-color: #e8f5e9;
+            color: #2e7d32;
+        }
+
+        .config-status.error {
+            background-color: #ffebee;
+            color: #c62828;
+        }
     </style>
 </head>
 
 <body>
-    <h1>Simple Resume Tracker</h1>
+    <h1>Resume Tracker with Firebase</h1>
 
     <div class="tabs">
         <div class="tab active" data-tab="track">Track Application</div>
         <div class="tab" data-tab="manage">Manage Resumes</div>
         <div class="tab" data-tab="view">View Entries</div>
+        <div class="tab" data-tab="settings">Settings</div>
     </div>
 
     <!-- Track Application Tab -->
     <div id="trackTab" class="tab-content active">
-        <div class="section">
-            <div class="section-title">Current Website</div>
-            <input type="text" id="currentUrl" readonly>
-            <input type="text" id="siteName" placeholder="Company/Website Name (auto-detected)">
+        <div id="firebaseSetupReminder" style="display: none;">
+            <div class="config-status error">
+                Please configure Firebase in the Settings tab to store PDFs
+            </div>
+            <button id="goToSettingsBtn" class="setup-btn">Go to Settings</button>
         </div>
 
-        <div class="section">
-            <div class="section-title">Select Resume Used</div>
-            <select id="resumeSelect">
-                <option value="">-- Select a resume --</option>
-            </select>
-        </div>
+        <div id="trackContent">
+            <div class="section">
+                <div class="section-title">Current Website</div>
+                <input type="text" id="currentUrl" readonly>
+                <input type="text" id="siteName" placeholder="Company/Website Name (auto-detected)">
+            </div>
 
-        <div class="section">
-            <div class="section-title">Job Details (Optional)</div>
-            <input type="text" id="jobTitle" placeholder="Job Title">
-        </div>
+            <div class="section">
+                <div class="section-title">Select Resume Used</div>
+                <select id="resumeSelect">
+                    <option value="">-- Select a resume --</option>
+                </select>
+            </div>
 
-        <button id="saveEntry">Save This Application</button>
-        <div id="saveSuccess" class="success-message">Application saved successfully!</div>
+            <div class="section">
+                <div class="section-title">Job Details (Optional)</div>
+                <input type="text" id="jobTitle" placeholder="Job Title">
+            </div>
+
+            <button id="saveEntry">Save This Application</button>
+            <div id="saveSuccess" class="success-message">Application saved successfully!</div>
+        </div>
     </div>
 
     <!-- Manage Resumes Tab -->
     <div id="manageTab" class="tab-content">
-        <div class="section">
-            <div class="section-title">Your Resume List</div>
-            <div id="resumeList" class="resume-list">
-                <!-- Resume items will be inserted here -->
+        <div id="firebaseSetupReminderManage" style="display: none;">
+            <div class="config-status error">
+                Please configure Firebase in the Settings tab to store PDFs
             </div>
+            <button id="goToSettingsBtnManage" class="setup-btn">Go to Settings</button>
+        </div>
 
-            <div class="section-title">Add New Resume</div>
-            <input type="text" id="newResumeName" placeholder="Resume name (e.g., Technical Resume v2)">
-            <div class="form-row">
-                <input type="text" id="newResumeFilename" placeholder="PDF filename (e.g., Resume_Tech_v2.pdf)">
-                <input type="file" id="newResumePdf" accept=".pdf" style="display: none;">
-                <button id="browseResumeBtn">Browse</button>
-            </div>
-            <div id="selectedFileName" class="file-name"></div>
+        <div id="manageContent">
+            <div class="section">
+                <div class="section-title">Your Resume List</div>
+                <div id="resumeList" class="resume-list">
+                    <!-- Resume items will be inserted here -->
+                </div>
 
-            <div class="button-group">
-                <button id="addResume">Add Resume</button>
-                <button id="clearResumes" class="secondary">Clear All</button>
+                <div class="section-title">Add New Resume</div>
+                <input type="text" id="newResumeName" placeholder="Resume name (e.g., Technical Resume v2)">
+                <div class="form-row">
+                    <input type="text" id="newResumeFilename" placeholder="PDF filename (e.g., Resume_Tech_v2.pdf)">
+                    <input type="file" id="newResumePdf" accept=".pdf" style="display: none;">
+                    <button id="browseResumeBtn">Browse</button>
+                </div>
+                <div id="selectedFileName" class="file-name"></div>
+                <div id="uploadProgress" class="progress-bar">
+                    <div id="progressBar" class="progress"></div>
+                </div>
+
+                <div class="button-group">
+                    <button id="addResume">Add Resume</button>
+                    <button id="clearResumes" class="secondary">Clear All</button>
+                </div>
             </div>
         </div>
     </div>
@@ -313,6 +435,39 @@
             </div>
         </div>
     </div>
+
+    <!-- Settings Tab -->
+    <div id="settingsTab" class="tab-content">
+        <div class="section">
+            <div class="section-title">Firebase Configuration</div>
+            <p>Enter your Firebase project details to enable PDF storage:</p>
+
+            <input type="text" id="apiKey" placeholder="API Key">
+            <input type="text" id="authDomain" placeholder="Auth Domain">
+            <input type="text" id="projectId" placeholder="Project ID">
+            <input type="text" id="storageBucket" placeholder="Storage Bucket">
+            <input type="text" id="messagingSenderId" placeholder="Messaging Sender ID">
+            <input type="text" id="appId" placeholder="App ID">
+
+            <button id="saveFirebaseConfig">Save Configuration</button>
+            <div id="configStatus" class="config-status" style="display: none;"></div>
+
+            <div class="section-title" style="margin-top: 20px;">How to Set Up Firebase</div>
+            <ol>
+                <li>Go to <a href="https://console.firebase.google.com/" target="_blank">Firebase Console</a></li>
+                <li>Create a new project or use an existing one</li>
+                <li>In Project Settings, add a new Web App</li>
+                <li>Copy the Firebase configuration values into the fields above</li>
+                <li>In Firebase Console, go to Storage and set up Firebase Storage</li>
+                <li>Set Storage rules to allow read and write access</li>
+            </ol>
+        </div>
+    </div>
+
+    <!-- Firebase App SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
+    <!-- Firebase Storage SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-storage-compat.js"></script>
 
     <script src="popup.js"></script>
 </body>

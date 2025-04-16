@@ -1,12 +1,16 @@
 {
     "manifest_version": 3,
-    "name": "Simple Resume Tracker",
+    "name": "Resume Tracker with Firebase",
     "version": "1.0",
-    "description": "Manually track which resume you used for each job application",
+    "description": "Track which resume you used for each job application with Firebase PDF storage",
     "permissions": [
         "storage",
         "activeTab",
         "tabs"
+    ],
+    "host_permissions": [
+        "https://*.firebaseio.com/*",
+        "https://*.googleapis.com/*"
     ],
     "action": {
         "default_popup": "popup.html",
@@ -20,5 +24,8 @@
         "16": "images/icon16.png",
         "48": "images/icon48.png",
         "128": "images/icon128.png"
+    },
+    "content_security_policy": {
+        "extension_pages": "script-src 'self' https://www.gstatic.com/ https://*.firebaseio.com https://www.googleapis.com; object-src 'self'"
     }
 }
