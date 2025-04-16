@@ -20,13 +20,16 @@
 
         .search-box {
             margin-bottom: 16px;
+            display: flex;
+            align-items: center;
         }
 
         input[type="text"] {
-            width: 70%;
+            flex-grow: 1;
             padding: 8px;
             border: 1px solid #ddd;
             border-radius: 4px;
+            margin-right: 8px;
         }
 
         button {
@@ -40,6 +43,10 @@
 
         button:hover {
             background-color: #3367d6;
+        }
+
+        .add-btn {
+            margin-left: auto;
         }
 
         table {
@@ -82,9 +89,69 @@
             color: #666;
         }
 
-        .export-btn {
+        .bottom-buttons {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 16px;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 100;
+        }
+
+        .modal-content {
+            background-color: white;
+            width: 70%;
+            max-width: 600px;
+            margin: 100px auto;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        .modal-title {
+            margin-top: 0;
+            font-size: 18px;
+        }
+
+        .form-group {
+            margin-bottom: 12px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 4px;
+            font-weight: bold;
+        }
+
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        .modal-buttons {
+            margin-top: 16px;
+            text-align: right;
+        }
+
+        .modal-buttons button {
+            margin-left: 8px;
+        }
+
+        .close-btn {
             float: right;
-            margin-top: 10px;
+            font-size: 20px;
+            cursor: pointer;
         }
     </style>
 </head>
@@ -96,6 +163,7 @@
         <input type="text" id="searchInput" placeholder="Search by company or job title...">
         <button id="searchBtn">Search</button>
         <button id="clearSearchBtn">Clear</button>
+        <button id="addManualBtn" class="add-btn">+ Add Manually</button>
     </div>
 
     <table id="applicationsTable">
@@ -118,7 +186,108 @@
         No applications found. Start applying to jobs, and your resume uploads will appear here.
     </div>
 
-    <button id="exportBtn" class="export-btn">Export to CSV</button>
+    <div class="bottom-buttons">
+        <button id="clearAllBtn">Clear All Data</button>
+        <button id="exportBtn">Export to CSV</button>
+    </div>
+
+    <!-- Add Application Modal -->
+    <div id="addModal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn" id="closeAddModal">&times;</span>
+            <h2 class="modal-title">Add Application Manually</h2>
+
+            <div class="form-group">
+                <label for="manualCompany">Company Name</label>
+                <input type="text" id="manualCompany" placeholder="e.g., Google">
+            </div>
+
+            <div class="form-group">
+                <label for="manualJobTitle">Job Title</label>
+                <input type="text" id="manualJobTitle" placeholder="e.g., Software Engineer">
+            </div>
+
+            <div class="form-group">
+                <label for="manualResume">Resume File Name</label>
+                <input type="text" id="manualResume" placeholder="e.g., MyResume_v2.pdf">
+            </div>
+
+            <div class="form-group">
+                <label for="manualWebsite">Website URL (optional)</label>
+                <input type="text" id="manualWebsite" placeholder="e.g., https://careers.google.com/...">
+            </div>
+
+            <div class="form-group">
+                <label for="manualDate">Date Applied</label>
+                <input type="date" id="manualDate">
+            </div>
+
+            <div class="form-group">
+                <label for="manualStatus">Status</label>
+                <select id="manualStatus">
+                    <option value="Applied">Applied</option>
+                    <option value="Interview">Interview</option>
+                    <option value="Rejected">Rejected</option>
+                    <option value="Offer">Offer</option>
+                    <option value="Accepted">Accepted</option>
+                </select>
+            </div>
+
+            <div class="modal-buttons">
+                <button id="cancelAddBtn">Cancel</button>
+                <button id="saveAddBtn">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Application Modal -->
+    <div id="editModal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn" id="closeEditModal">&times;</span>
+            <h2 class="modal-title">Edit Application</h2>
+
+            <div class="form-group">
+                <label for="editCompany">Company Name</label>
+                <input type="text" id="editCompany">
+            </div>
+
+            <div class="form-group">
+                <label for="editJobTitle">Job Title</label>
+                <input type="text" id="editJobTitle">
+            </div>
+
+            <div class="form-group">
+                <label for="editResume">Resume File Name</label>
+                <input type="text" id="editResume">
+            </div>
+
+            <div class="form-group">
+                <label for="editWebsite">Website URL</label>
+                <input type="text" id="editWebsite">
+            </div>
+
+            <div class="form-group">
+                <label for="editDate">Date Applied</label>
+                <input type="date" id="editDate">
+            </div>
+
+            <div class="form-group">
+                <label for="editStatus">Status</label>
+                <select id="editStatus">
+                    <option value="Applied">Applied</option>
+                    <option value="Interview">Interview</option>
+                    <option value="Rejected">Rejected</option>
+                    <option value="Offer">Offer</option>
+                    <option value="Accepted">Accepted</option>
+                </select>
+            </div>
+
+            <div class="modal-buttons">
+                <button id="cancelEditBtn">Cancel</button>
+                <button id="saveEditBtn">Save</button>
+            </div>
+        </div>
+    </div>
 
     <script src="popup.js"></script>
 </body>

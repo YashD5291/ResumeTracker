@@ -1,5 +1,7 @@
-// popup.js - Dashboard functionality
 document.addEventListener('DOMContentLoaded', function () {
+    // Set today's date for the manual entry form
+    document.getElementById('manualDate').valueAsDate = new Date();
+
     // Load all applications when popup opens
     loadApplications();
 
@@ -7,6 +9,14 @@ document.addEventListener('DOMContentLoaded', function () {
     document.getElementById('searchBtn').addEventListener('click', filterApplications);
     document.getElementById('clearSearchBtn').addEventListener('click', clearSearch);
     document.getElementById('exportBtn').addEventListener('click', exportToCSV);
+    document.getElementById('clearAllBtn').addEventListener('click', clearAllData);
+    document.getElementById('addManualBtn').addEventListener('click', showAddModal);
+    document.getElementById('closeAddModal').addEventListener('click', hideAddModal);
+    document.getElementById('cancelAddBtn').addEventListener('click', hideAddModal);
+    document.getElementById('saveAddBtn').addEventListener('click', saveManualApplication);
+    document.getElementById('closeEditModal').addEventListener('click', hideEditModal);
+    document.getElementById('cancelEditBtn').addEventListener('click', hideEditModal);
+    document.getElementById('saveEditBtn').addEventListener('click', saveEditApplication);
 
     // Add listener for search input (search as you type)
     document.getElementById('searchInput').addEventListener('input', filterApplications);
@@ -33,9 +43,9 @@ function displayApplications(applications, filter = '') {
     if (filter) {
         const lowercaseFilter = filter.toLowerCase();
         filteredApps = applications.filter(app =>
-            app.companyName.toLowerCase().includes(lowercaseFilter) ||
-            app.jobTitle.toLowerCase().includes(lowercaseFilter) ||
-            app.resumeFileName.toLowerCase().includes(lowercaseFilter)
+            (app.companyName || '').toLowerCase().includes(lowercaseFilter) ||
+            (app.jobTitle || '').toLowerCase().includes(lowercaseFilter) ||
+            (app.resumeFileName || '').toLowerCase().includes(lowercaseFilter)
         );
     }
 
@@ -55,15 +65,28 @@ function displayApplications(applications, filter = '') {
         const row = document.createElement('tr');
 
         // Format date
-        const date = new Date(app.dateApplied);
-        const formattedDate = `${date.toLocaleDateString()} ${date.toLocaleTimeString()}`;
+        let formattedDate = 'Unknown';
+        try {
+            const date = new Date(app.dateApplied);
+            formattedDate = date.toLocaleDateString();
+        } catch (e) {
+            console.error('Date parsing error:', e);
+        }
 
+        // Default values for missing properties
+        const companyName = app.companyName || 'Unknown Company';
+        const jobTitle = app.jobTitle || 'Unknown Position';
+        const resumeFileName = app.resumeFileName || 'Unknown File';
+        const status = app.status || 'Applied';
+        const websiteUrl = app.websiteUrl || '#';
+
+        // Create row HTML
         row.innerHTML = `
         <td>${formattedDate}</td>
-        <td><a href="${app.websiteUrl}" target="_blank">${app.companyName}</a></td>
-        <td>${app.jobTitle}</td>
-        <td>${app.resumeFileName}</td>
-        <td class="status-${app.status.toLowerCase()}">${app.status}</td>
+        <td>${websiteUrl ? `<a href="${websiteUrl}" target="_blank">${companyName}</a>` : companyName}</td>
+        <td>${jobTitle}</td>
+        <td>${resumeFileName}</td>
+        <td class="status-${status.toLowerCase()}">${status}</td>
         <td class="action-buttons">
           <button class="edit-btn" data-index="${index}">Edit</button>
           <button class="delete-btn" data-index="${index}">Delete</button>
@@ -99,7 +122,71 @@ function clearSearch() {
     loadApplications();
 }
 
-// Edit application status and details
+// Show add application modal
+function showAddModal() {
+    document.getElementById('addModal').style.display = 'block';
+}
+
+// Hide add application modal
+function hideAddModal() {
+    document.getElementById('addModal').style.display = 'none';
+}
+
+// Save manual application entry
+function saveManualApplication() {
+    const companyName = document.getElementById('manualCompany').value.trim();
+    const jobTitle = document.getElementById('manualJobTitle').value.trim();
+    const resumeFileName = document.getElementById('manualResume').value.trim();
+    const websiteUrl = document.getElementById('manualWebsite').value.trim();
+    const dateValue = document.getElementById('manualDate').value;
+    const status = document.getElementById('manualStatus').value;
+
+    // Validate required fields
+    if (!companyName || !jobTitle || !resumeFileName) {
+        alert('Please fill in Company Name, Job Title, and Resume File Name.');
+        return;
+    }
+
+    // Format date
+    let dateApplied;
+    if (dateValue) {
+        dateApplied = new Date(dateValue).toISOString();
+    } else {
+        dateApplied = new Date().toISOString();
+    }
+
+    // Create application object
+    const newApplication = {
+        companyName,
+        jobTitle,
+        resumeFileName,
+        websiteUrl,
+        dateApplied,
+        status
+    };
+
+    // Save to storage
+    chrome.storage.local.get('applications', function (data) {
+        const applications = data.applications || [];
+        applications.push(newApplication);
+
+        chrome.storage.local.set({ 'applications': applications }, function () {
+            // Reset form
+            document.getElementById('manualCompany').value = '';
+            document.getElementById('manualJobTitle').value = '';
+            document.getElementById('manualResume').value = '';
+            document.getElementById('manualWebsite').value = '';
+            document.getElementById('manualDate').valueAsDate = new Date();
+            document.getElementById('manualStatus').value = 'Applied';
+
+            // Hide modal and refresh list
+            hideAddModal();
+            loadApplications(document.getElementById('searchInput').value.trim());
+        });
+    });
+}
+
+// Show edit modal with application data
 function editApplication(index) {
     chrome.storage.local.get('applications', function (data) {
         const applications = data.applications || [];
@@ -107,21 +194,82 @@ function editApplication(index) {
 
         if (!app) return;
 
-        // Simple prompt for status update (in a real extension, use a modal)
-        const newStatus = prompt(
-            `Update status for ${app.jobTitle} at ${app.companyName}:
-        Options: Applied, Interview, Rejected, Offer, Accepted`,
-            app.status
-        );
+        // Set form values from application data
+        document.getElementById('editCompany').value = app.companyName || '';
+        document.getElementById('editJobTitle').value = app.jobTitle || '';
+        document.getElementById('editResume').value = app.resumeFileName || '';
+        document.getElementById('editWebsite').value = app.websiteUrl || '';
 
-        if (newStatus) {
-            app.status = newStatus;
-            applications[index] = app;
-
-            chrome.storage.local.set({ 'applications': applications }, function () {
-                loadApplications(document.getElementById('searchInput').value.trim());
-            });
+        // Format date for date input
+        try {
+            const date = new Date(app.dateApplied);
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            document.getElementById('editDate').value = `${year}-${month}-${day}`;
+        } catch (e) {
+            document.getElementById('editDate').valueAsDate = new Date();
         }
+
+        document.getElementById('editStatus').value = app.status || 'Applied';
+
+        // Store index for saving
+        document.getElementById('saveEditBtn').setAttribute('data-index', index);
+
+        // Show modal
+        document.getElementById('editModal').style.display = 'block';
+    });
+}
+
+// Hide edit modal
+function hideEditModal() {
+    document.getElementById('editModal').style.display = 'none';
+}
+
+// Save edited application
+function saveEditApplication() {
+    const index = parseInt(document.getElementById('saveEditBtn').getAttribute('data-index'));
+
+    const companyName = document.getElementById('editCompany').value.trim();
+    const jobTitle = document.getElementById('editJobTitle').value.trim();
+    const resumeFileName = document.getElementById('editResume').value.trim();
+    const websiteUrl = document.getElementById('editWebsite').value.trim();
+    const dateValue = document.getElementById('editDate').value;
+    const status = document.getElementById('editStatus').value;
+
+    // Validate required fields
+    if (!companyName || !jobTitle || !resumeFileName) {
+        alert('Please fill in Company Name, Job Title, and Resume File Name.');
+        return;
+    }
+
+    // Format date
+    let dateApplied;
+    if (dateValue) {
+        dateApplied = new Date(dateValue).toISOString();
+    } else {
+        dateApplied = new Date().toISOString();
+    }
+
+    chrome.storage.local.get('applications', function (data) {
+        const applications = data.applications || [];
+
+        // Update application data
+        applications[index] = {
+            ...applications[index],
+            companyName,
+            jobTitle,
+            resumeFileName,
+            websiteUrl,
+            dateApplied,
+            status
+        };
+
+        chrome.storage.local.set({ 'applications': applications }, function () {
+            // Hide modal and refresh list
+            hideEditModal();
+            loadApplications(document.getElementById('searchInput').value.trim());
+        });
     });
 }
 
@@ -141,6 +289,15 @@ function deleteApplication(index) {
     }
 }
 
+// Clear all application data
+function clearAllData() {
+    if (confirm('Are you sure you want to delete ALL application records? This cannot be undone.')) {
+        chrome.storage.local.set({ 'applications': [] }, function () {
+            loadApplications();
+        });
+    }
+}
+
 // Export applications to CSV
 function exportToCSV() {
     chrome.storage.local.get('applications', function (data) {
@@ -156,15 +313,19 @@ function exportToCSV() {
 
         // Add each application as a row
         applications.forEach(app => {
-            const date = new Date(app.dateApplied).toLocaleDateString();
-            // Escape commas in fields
+            let date = 'Unknown Date';
+            try {
+                date = new Date(app.dateApplied).toLocaleDateString();
+            } catch (e) { }
+
+            // Escape commas in fields and handle missing values
             const row = [
                 date,
-                `"${app.companyName.replace(/"/g, '""')}"`,
-                `"${app.jobTitle.replace(/"/g, '""')}"`,
-                `"${app.resumeFileName.replace(/"/g, '""')}"`,
-                app.status,
-                `"${app.websiteUrl.replace(/"/g, '""')}"`
+                `"${(app.companyName || 'Unknown Company').replace(/"/g, '""')}"`,
+                `"${(app.jobTitle || 'Unknown Position').replace(/"/g, '""')}"`,
+                `"${(app.resumeFileName || 'Unknown File').replace(/"/g, '""')}"`,
+                app.status || 'Applied',
+                `"${(app.websiteUrl || '').replace(/"/g, '""')}"`
             ];
 
             csv += row.join(',') + '\n';
@@ -182,7 +343,7 @@ function exportToCSV() {
         // Clean up
         setTimeout(() => {
             document.body.removeChild(a);
-            window.URL.revokeObjectURL(url);
+            window.URL.revoObjectURL(url);
         }, 0);
     });
 }
