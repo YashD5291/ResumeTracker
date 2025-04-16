@@ -1,16 +1,16 @@
 {
     "manifest_version": 3,
-    "name": "Resume Tracker with Firebase",
+    "name": "Resume Tracker",
     "version": "1.0",
-    "description": "Track which resume you used for each job application with Firebase PDF storage",
+    "description": "Track which resume you used for each job application with MongoDB sync",
     "permissions": [
         "storage",
         "activeTab",
         "tabs"
     ],
     "host_permissions": [
-        "https://*.firebaseio.com/*",
-        "https://*.googleapis.com/*"
+        "https://*.mongodb.com/*",
+        "https://*.mongodb-api.com/*"
     ],
     "action": {
         "default_popup": "popup.html",
@@ -24,8 +24,5 @@
         "16": "images/icon16.png",
         "48": "images/icon48.png",
         "128": "images/icon128.png"
-    },
-    "content_security_policy": {
-        "extension_pages": "script-src 'self' https://www.gstatic.com/ https://*.firebaseio.com https://www.googleapis.com; object-src 'self'"
     }
 }

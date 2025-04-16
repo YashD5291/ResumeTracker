@@ -1,9 +1,9 @@
-let firebaseApp = null;
-let storage = null;
+let mongodbEnabled = false;
+let mongoConfig = null;
 
 document.addEventListener('DOMContentLoaded', function () {
-    // Check Firebase configuration
-    checkFirebaseConfig();
+    // Check MongoDB configuration
+    checkMongoDBConfig();
 
     // Tab navigation
     const tabs = document.querySelectorAll('.tab');
@@ -57,16 +57,24 @@ document.addEventListener('DOMContentLoaded', function () {
     document.getElementById('searchInput').addEventListener('input', searchEntries);
     document.getElementById('clearEntries').addEventListener('click', clearEntries);
     document.getElementById('exportEntries').addEventListener('click', exportEntries);
-    document.getElementById('saveFirebaseConfig').addEventListener('click', saveFirebaseConfig);
 
-    // Settings navigation
-    document.getElementById('goToSettingsBtn')?.addEventListener('click', function () {
-        document.querySelector('.tab[data-tab="settings"]').click();
+    // MongoDB configuration events
+    document.getElementById('enableMongoSync').addEventListener('change', function () {
+        const mongoConfigForm = document.getElementById('mongoConfigForm');
+        if (this.checked) {
+            mongoConfigForm.style.display = 'block';
+        } else {
+            mongoConfigForm.style.display = 'none';
+        }
     });
 
-    document.getElementById('goToSettingsBtnManage')?.addEventListener('click', function () {
-        document.querySelector('.tab[data-tab="settings"]').click();
-    });
+    document.getElementById('saveMongoConfig').addEventListener('click', saveMongoDBConfig);
+    document.getElementById('testConnection').addEventListener('click', testMongoDBConnection);
+
+    const syncNowBtn = document.getElementById('syncNowBtn');
+    if (syncNowBtn) {
+        syncNowBtn.addEventListener('click', syncToMongoDB);
+    }
 
     // PDF file selection
     document.getElementById('browseResumeBtn').addEventListener('click', function () {
@@ -82,137 +90,125 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 });
 
-// Check and initialize Firebase configuration
-function checkFirebaseConfig() {
-    chrome.storage.local.get('firebaseConfig', function (data) {
-        const config = data.firebaseConfig;
+// Check and initialize MongoDB configuration
+function checkMongoDBConfig() {
+    chrome.storage.local.get(['mongoConfig', 'mongodbEnabled'], function (data) {
+        mongoConfig = data.mongoConfig;
+        mongodbEnabled = data.mongodbEnabled || false;
 
-        if (config && isValidFirebaseConfig(config)) {
-            // Initialize Firebase with the stored config
-            initializeFirebase(config);
+        // Update UI based on the configuration
+        const enableMongoSync = document.getElementById('enableMongoSync');
+        enableMongoSync.checked = mongodbEnabled;
 
-            // Hide setup reminders
-            document.getElementById('firebaseSetupReminder').style.display = 'none';
-            document.getElementById('firebaseSetupReminderManage').style.display = 'none';
-            document.getElementById('trackContent').style.display = 'block';
-            document.getElementById('manageContent').style.display = 'block';
+        const mongoConfigForm = document.getElementById('mongoConfigForm');
+        mongoConfigForm.style.display = mongodbEnabled ? 'block' : 'none';
 
-            // Pre-fill configuration fields
-            document.getElementById('apiKey').value = config.apiKey || '';
-            document.getElementById('authDomain').value = config.authDomain || '';
-            document.getElementById('projectId').value = config.projectId || '';
-            document.getElementById('storageBucket').value = config.storageBucket || '';
-            document.getElementById('messagingSenderId').value = config.messagingSenderId || '';
-            document.getElementById('appId').value = config.appId || '';
+        // Show Sync Now button if MongoDB is enabled
+        const syncNowBtn = document.getElementById('syncNowBtn');
+        if (syncNowBtn) {
+            syncNowBtn.style.display = mongodbEnabled ? 'inline-block' : 'none';
+        }
 
-            // Show success message in settings
-            const configStatus = document.getElementById('configStatus');
-            configStatus.textContent = 'Firebase is configured and connected';
-            configStatus.className = 'config-status success';
-            configStatus.style.display = 'block';
-        } else {
-            // Show setup reminders
-            document.getElementById('firebaseSetupReminder').style.display = 'block';
-            document.getElementById('firebaseSetupReminderManage').style.display = 'block';
-            document.getElementById('trackContent').style.display = 'none';
-            document.getElementById('manageContent').style.display = 'none';
-
-            // Show error message in settings
-            const configStatus = document.getElementById('configStatus');
-            configStatus.textContent = 'Firebase configuration needed';
-            configStatus.className = 'config-status error';
-            configStatus.style.display = 'block';
+        // Pre-fill configuration fields if available
+        if (mongoConfig) {
+            document.getElementById('mongoUri').value = mongoConfig.mongoUri || '';
+            document.getElementById('dbName').value = mongoConfig.dbName || '';
+            document.getElementById('collectionName').value = mongoConfig.collectionName || '';
+            document.getElementById('apiKey').value = mongoConfig.apiKey || '';
+            document.getElementById('dataApiUrl').value = mongoConfig.dataApiUrl || '';
         }
     });
 }
 
-// Validate Firebase configuration
-function isValidFirebaseConfig(config) {
-    return config &&
-        config.apiKey &&
-        config.authDomain &&
-        config.projectId &&
-        config.storageBucket;
-}
-
-// Initialize Firebase
-function initializeFirebase(config) {
-    try {
-        firebaseApp = firebase.initializeApp(config);
-        storage = firebase.storage();
-        return true;
-    } catch (error) {
-        console.error('Error initializing Firebase:', error);
-        return false;
-    }
-}
-
-// Save Firebase configuration
-function saveFirebaseConfig() {
-    const config = {
-        apiKey: document.getElementById('apiKey').value.trim(),
-        authDomain: document.getElementById('authDomain').value.trim(),
-        projectId: document.getElementById('projectId').value.trim(),
-        storageBucket: document.getElementById('storageBucket').value.trim(),
-        messagingSenderId: document.getElementById('messagingSenderId').value.trim(),
-        appId: document.getElementById('appId').value.trim()
-    };
+// Save MongoDB configuration
+function saveMongoDBConfig() {
+    const mongoUri = document.getElementById('mongoUri').value.trim();
+    const dbName = document.getElementById('dbName').value.trim();
+    const collectionName = document.getElementById('collectionName').value.trim();
+    const apiKey = document.getElementById('apiKey').value.trim();
+    const dataApiUrl = document.getElementById('dataApiUrl').value.trim();
 
     // Validate configuration
-    if (!config.apiKey || !config.authDomain || !config.projectId || !config.storageBucket) {
+    if (!mongoUri || !dbName || !collectionName || !apiKey || !dataApiUrl) {
         const configStatus = document.getElementById('configStatus');
-        configStatus.textContent = 'Please fill in at least API Key, Auth Domain, Project ID, and Storage Bucket';
+        configStatus.textContent = 'Please fill in all MongoDB configuration fields';
         configStatus.className = 'config-status error';
         configStatus.style.display = 'block';
         return;
     }
 
-    // Try to initialize Firebase
-    if (firebaseApp) {
-        firebaseApp.delete().then(() => {
-            if (initializeFirebase(config)) {
-                saveConfigToStorage(config);
-            } else {
-                showConfigError();
-            }
-        }).catch(error => {
-            console.error('Error deleting Firebase app:', error);
-            showConfigError();
-        });
-    } else {
-        if (initializeFirebase(config)) {
-            saveConfigToStorage(config);
-        } else {
-            showConfigError();
-        }
-    }
-}
+    // Save configuration
+    const newMongoConfig = {
+        mongoUri,
+        dbName,
+        collectionName,
+        apiKey,
+        dataApiUrl
+    };
 
-// Save configuration to storage
-function saveConfigToStorage(config) {
-    chrome.storage.local.set({ 'firebaseConfig': config }, function () {
+    chrome.storage.local.set({
+        'mongoConfig': newMongoConfig,
+        'mongodbEnabled': true
+    }, function () {
+        mongoConfig = newMongoConfig;
+        mongodbEnabled = true;
+
+        // Show success message
         const configStatus = document.getElementById('configStatus');
-        configStatus.textContent = 'Firebase configuration saved successfully';
+        configStatus.textContent = 'MongoDB configuration saved successfully';
         configStatus.className = 'config-status success';
         configStatus.style.display = 'block';
 
-        // Hide setup reminders
-        document.getElementById('firebaseSetupReminder').style.display = 'none';
-        document.getElementById('firebaseSetupReminderManage').style.display = 'none';
-        document.getElementById('trackContent').style.display = 'block';
-        document.getElementById('manageContent').style.display = 'block';
+        // Show Sync Now button
+        const syncNowBtn = document.getElementById('syncNowBtn');
+        if (syncNowBtn) {
+            syncNowBtn.style.display = 'inline-block';
+        }
 
-        // Reload resumes with new configuration
-        loadResumes();
+        // Test connection automatically
+        testMongoDBConnection();
     });
 }
 
-// Show configuration error
-function showConfigError() {
+// Test MongoDB connection
+function testMongoDBConnection() {
     const configStatus = document.getElementById('configStatus');
-    configStatus.textContent = 'Failed to connect to Firebase. Please check your configuration.';
-    configStatus.className = 'config-status error';
+    configStatus.textContent = 'Testing connection...';
+    configStatus.className = 'config-status';
     configStatus.style.display = 'block';
+
+    if (!mongoConfig) {
+        configStatus.textContent = 'Please save configuration first';
+        configStatus.className = 'config-status error';
+        return;
+    }
+
+    // Make a simple ping request to the Data API
+    fetch(mongoConfig.dataApiUrl + '/action/findOne', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'api-key': mongoConfig.apiKey
+        },
+        body: JSON.stringify({
+            dataSource: 'Cluster0', // This is typically the default cluster name
+            database: mongoConfig.dbName,
+            collection: mongoConfig.collectionName,
+            filter: { _test: true }
+        })
+    })
+        .then(response => {
+            if (response.ok) {
+                configStatus.textContent = 'Connection successful!';
+                configStatus.className = 'config-status success';
+            } else {
+                throw new Error('Connection failed with status: ' + response.status);
+            }
+        })
+        .catch(error => {
+            configStatus.textContent = 'Connection failed: ' + error.message;
+            configStatus.className = 'config-status error';
+        });
 }
 
 // Load resumes from storage
@@ -234,12 +230,12 @@ function loadResumes() {
           <div class="resume-details">
             <div class="resume-name">${resume.name}</div>
             <div class="resume-filename">${resume.filename}</div>
-            <div class="${resume.pdfUrl ? 'upload-status has-pdf' : 'upload-status no-pdf'}">
-              ${resume.pdfUrl ? 'PDF stored in Firebase' : 'No PDF stored'}
+            <div class="${resume.pdfData ? 'upload-status has-pdf' : 'upload-status no-pdf'}">
+              ${resume.pdfData ? 'PDF stored locally' : 'No PDF stored'}
             </div>
           </div>
           <div class="resume-actions">
-            ${resume.pdfUrl ? '<button class="view-btn" data-index="' + index + '">View PDF</button>' : ''}
+            ${resume.pdfData ? '<button class="view-btn" data-index="' + index + '">View PDF</button>' : ''}
             <button class="delete-btn" data-index="${index}">×</button>
           </div>
         `;
@@ -280,13 +276,6 @@ function loadResumes() {
 
 // Add a new resume
 function addResume() {
-    // Check if Firebase is configured
-    if (!storage) {
-        alert('Please configure Firebase in the Settings tab first');
-        document.querySelector('.tab[data-tab="settings"]').click();
-        return;
-    }
-
     const newResumeName = document.getElementById('newResumeName').value.trim();
     const newResumeFilename = document.getElementById('newResumeFilename').value.trim();
     const fileInput = document.getElementById('newResumePdf');
@@ -314,42 +303,41 @@ function addResume() {
         id: newResumeId,
         name: newResumeName,
         filename: newResumeFilename,
-        pdfUrl: null
+        pdfData: null
     };
 
-    // If PDF file is selected, upload to Firebase
+    // If PDF file is selected, read and store it
     if (hasFile) {
         const file = fileInput.files[0];
-        const storageRef = storage.ref();
-        const resumeRef = storageRef.child(`resumes/${newResumeId}/${file.name}`);
+        const reader = new FileReader();
 
-        const uploadTask = resumeRef.put(file);
-
-        uploadTask.on('state_changed',
-            (snapshot) => {
-                // Progress function
-                const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-                document.getElementById('progressBar').style.width = progress + '%';
-            },
-            (error) => {
-                // Error function
-                console.error('Upload failed:', error);
-                document.getElementById('uploadProgress').style.display = 'none';
-                alert('Failed to upload PDF: ' + error.message);
-
-                // Still save the resume without PDF URL
-                saveResumeToStorage(newResume);
-            },
-            () => {
-                // Complete function - get the download URL
-                uploadTask.snapshot.ref.getDownloadURL().then((downloadURL) => {
-                    newResume.pdfUrl = downloadURL;
-                    saveResumeToStorage(newResume);
-                });
+        reader.onprogress = function (event) {
+            if (event.lengthComputable) {
+                const percentComplete = (event.loaded / event.total) * 100;
+                document.getElementById('progressBar').style.width = percentComplete + '%';
             }
-        );
+        };
+
+        reader.onload = function (event) {
+            // Store file data as base64 string
+            newResume.pdfData = event.target.result;
+
+            // Save resume with PDF data
+            saveResumeToStorage(newResume);
+        };
+
+        reader.onerror = function () {
+            alert('Error reading the PDF file');
+            document.getElementById('uploadProgress').style.display = 'none';
+
+            // Still save the resume without PDF data
+            saveResumeToStorage(newResume);
+        };
+
+        // Read the file as a data URL (base64)
+        reader.readAsDataURL(file);
     } else {
-        // Save resume without PDF URL
+        // Save resume without PDF data
         saveResumeToStorage(newResume);
     }
 }
@@ -381,29 +369,8 @@ function saveResumeToStorage(newResume) {
 function deleteResume(index) {
     chrome.storage.local.get('resumes', function (data) {
         const resumes = data.resumes || [];
-        const resume = resumes[index];
 
-        // If there's a PDF in Firebase, delete it
-        if (resume && resume.pdfUrl && storage) {
-            try {
-                // Extract the path from the URL
-                const url = new URL(resume.pdfUrl);
-                const pathMatch = url.pathname.match(/\/o\/(.+?)(\?|$)/);
-
-                if (pathMatch && pathMatch[1]) {
-                    const path = decodeURIComponent(pathMatch[1]);
-                    const fileRef = storage.ref(path);
-
-                    fileRef.delete().catch(error => {
-                        console.error('Error deleting file from Firebase:', error);
-                    });
-                }
-            } catch (error) {
-                console.error('Error parsing URL:', error);
-            }
-        }
-
-        // Remove resume from list
+        // Remove resume at index
         resumes.splice(index, 1);
 
         // Save updated list
@@ -420,9 +387,9 @@ function viewResumePdf(index) {
         const resumes = data.resumes || [];
         const resume = resumes[index];
 
-        if (resume && resume.pdfUrl) {
+        if (resume && resume.pdfData) {
             // Open the PDF in a new tab
-            chrome.tabs.create({ url: resume.pdfUrl });
+            chrome.tabs.create({ url: resume.pdfData });
         } else {
             alert('No PDF file available for this resume');
         }
@@ -431,43 +398,12 @@ function viewResumePdf(index) {
 
 // Clear all resumes
 function clearResumes() {
-    if (!confirm('Are you sure you want to clear all resumes?')) {
-        return;
-    }
-
-    chrome.storage.local.get('resumes', function (data) {
-        const resumes = data.resumes || [];
-
-        // Delete all PDFs from Firebase
-        if (storage) {
-            resumes.forEach(resume => {
-                if (resume.pdfUrl) {
-                    try {
-                        // Extract the path from the URL
-                        const url = new URL(resume.pdfUrl);
-                        const pathMatch = url.pathname.match(/\/o\/(.+?)(\?|$)/);
-
-                        if (pathMatch && pathMatch[1]) {
-                            const path = decodeURIComponent(pathMatch[1]);
-                            const fileRef = storage.ref(path);
-
-                            fileRef.delete().catch(error => {
-                                console.error('Error deleting file from Firebase:', error);
-                            });
-                        }
-                    } catch (error) {
-                        console.error('Error parsing URL:', error);
-                    }
-                }
-            });
-        }
-
-        // Clear resumes from local storage
+    if (confirm('Are you sure you want to clear all resumes?')) {
         chrome.storage.local.set({ 'resumes': [] }, function () {
             // Reload resume list
             loadResumes();
         });
-    });
+    }
 }
 
 // Save application entry
@@ -499,15 +435,17 @@ function saveEntry() {
         }
 
         // Create entry object
+        const entryId = 'entry_' + Date.now();
         const entry = {
+            id: entryId,
             url: url,
             site: siteName,
             resumeId: resumeId,
             resumeName: selectedResume.name,
             resumeFilename: selectedResume.filename,
-            pdfUrl: selectedResume.pdfUrl,
             job: jobTitle,
-            date: new Date().toISOString()
+            date: new Date().toISOString(),
+            synced: false
         };
 
         // Save entry
@@ -525,6 +463,11 @@ function saveEntry() {
                     successMsg.style.display = 'none';
                 }, 3000);
 
+                // Try to sync to MongoDB if enabled
+                if (mongodbEnabled && mongoConfig) {
+                    syncEntryToMongoDB(entry);
+                }
+
                 // Switch to view tab
                 document.querySelector('.tab[data-tab="view"]').click();
 
@@ -535,7 +478,141 @@ function saveEntry() {
     });
 }
 
-// Load entries
+// Sync a single entry to MongoDB
+function syncEntryToMongoDB(entry) {
+    if (!mongodbEnabled || !mongoConfig) return;
+
+    const entryForSync = {
+        ...entry,
+        _id: entry.id // MongoDB requires an _id field
+    };
+
+    // Remove PDF data from the synced entry
+    if (entryForSync.pdfData) {
+        delete entryForSync.pdfData;
+    }
+
+    fetch(mongoConfig.dataApiUrl + '/action/updateOne', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'api-key': mongoConfig.apiKey
+        },
+        body: JSON.stringify({
+            dataSource: 'Cluster0',
+            database: mongoConfig.dbName,
+            collection: mongoConfig.collectionName,
+            filter: { _id: entry.id },
+            update: { $set: entryForSync },
+            upsert: true
+        })
+    })
+        .then(response => response.json())
+        .then(data => {
+            if (data.matchedCount > 0 || data.upsertedId) {
+                // Update the entry in local storage to mark as synced
+                chrome.storage.local.get('entries', function (storageData) {
+                    const entries = storageData.entries || [];
+                    const entryIndex = entries.findIndex(e => e.id === entry.id);
+
+                    if (entryIndex >= 0) {
+                        entries[entryIndex].synced = true;
+                        chrome.storage.local.set({ 'entries': entries }, function () {
+                            // Reload entries to update the UI
+                            loadEntries();
+                        });
+                    }
+                });
+            }
+        })
+        .catch(error => {
+            console.error('Error syncing entry to MongoDB:', error);
+        });
+}
+
+// Sync all entries to MongoDB
+function syncToMongoDB() {
+    if (!mongodbEnabled || !mongoConfig) {
+        alert('MongoDB sync is not configured. Please go to Settings.');
+        return;
+    }
+
+    const configStatus = document.getElementById('configStatus');
+    if (configStatus) {
+        configStatus.textContent = 'Syncing entries to MongoDB...';
+        configStatus.className = 'config-status';
+        configStatus.style.display = 'block';
+    }
+
+    chrome.storage.local.get('entries', function (data) {
+        const entries = data.entries || [];
+        const unsyncedEntries = entries.filter(entry => !entry.synced);
+
+        if (unsyncedEntries.length === 0) {
+            if (configStatus) {
+                configStatus.textContent = 'All entries already synced!';
+                configStatus.className = 'config-status success';
+            }
+            return;
+        }
+
+        // Create a deep copy of entries without PDF data
+        const entriesForSync = unsyncedEntries.map(entry => {
+            const entryCopy = { ...entry, _id: entry.id };
+            if (entryCopy.pdfData) {
+                delete entryCopy.pdfData;
+            }
+            return entryCopy;
+        });
+
+        // Use insertMany for bulk operation
+        fetch(mongoConfig.dataApiUrl + '/action/insertMany', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'api-key': mongoConfig.apiKey
+            },
+            body: JSON.stringify({
+                dataSource: 'Cluster0',
+                database: mongoConfig.dbName,
+                collection: mongoConfig.collectionName,
+                documents: entriesForSync
+            })
+        })
+            .then(response => response.json())
+            .then(data => {
+                if (data.insertedIds && data.insertedIds.length > 0) {
+                    // Update all entries to mark as synced
+                    const updatedEntries = entries.map(entry => {
+                        if (!entry.synced) {
+                            return { ...entry, synced: true };
+                        }
+                        return entry;
+                    });
+
+                    chrome.storage.local.set({ 'entries': updatedEntries }, function () {
+                        // Show success message
+                        if (configStatus) {
+                            configStatus.textContent = `Successfully synced ${data.insertedIds.length} entries!`;
+                            configStatus.className = 'config-status success';
+                        }
+
+                        // Reload entries to update the UI
+                        loadEntries();
+                    });
+                }
+            })
+            .catch(error => {
+                console.error('Error syncing entries to MongoDB:', error);
+                if (configStatus) {
+                    configStatus.textContent = 'Sync failed: ' + error.message;
+                    configStatus.className = 'config-status error';
+                }
+            });
+    });
+}
+
+// Load entries from storage
 function loadEntries(filter = '') {
     chrome.storage.local.get('entries', function (data) {
         const entries = data.entries || [];
@@ -565,38 +642,56 @@ function loadEntries(filter = '') {
             entriesBody.appendChild(row);
         } else {
             filteredEntries.forEach((entry, index) => {
-                const hasPdf = !!entry.pdfUrl;
+                // Look up the resume to check if it has PDF data
+                chrome.storage.local.get('resumes', function (resumeData) {
+                    const resumes = resumeData.resumes || [];
+                    const resume = resumes.find(r => r.id === entry.resumeId);
+                    const hasPdf = resume && resume.pdfData;
 
-                const row = document.createElement('tr');
-                row.innerHTML = `
-          <td><a href="${entry.url}" target="_blank">${entry.site || 'Unknown'}</a></td>
-          <td>${entry.job || 'N/A'}</td>
-          <td>
-            <div>${entry.resumeName || 'Unknown'}</div>
-            <div class="file-name">${entry.resumeFilename}</div>
-            ${hasPdf ? '<button class="view-btn view-entry-pdf" data-url="' + entry.pdfUrl + '">View PDF</button>' : ''}
-          </td>
-          <td><button class="delete-btn" data-index="${entries.indexOf(entry)}">×</button></td>
-        `;
-                entriesBody.appendChild(row);
-            });
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+            <td><a href="${entry.url}" target="_blank">${entry.site || 'Unknown'}</a></td>
+            <td>${entry.job || 'N/A'}</td>
+            <td>
+              <div>${entry.resumeName || 'Unknown'}</div>
+              <div class="file-name">${entry.resumeFilename}</div>
+              ${hasPdf ? '<button class="view-btn view-entry-pdf" data-resume-id="' + entry.resumeId + '">View PDF</button>' : ''}
+              ${mongodbEnabled ? `<span class="sync-indicator ${entry.synced ? 'synced' : 'not-synced'}">${entry.synced ? 'Synced' : 'Not synced'}</span>` : ''}
+            </td>
+            <td><button class="delete-btn" data-index="${entries.indexOf(entry)}">×</button></td>
+          `;
+                    entriesBody.appendChild(row);
 
-            // Add event listeners to delete buttons
-            document.querySelectorAll('#entriesBody .delete-btn').forEach(btn => {
-                btn.addEventListener('click', function () {
-                    deleteEntry(parseInt(this.getAttribute('data-index')));
-                });
-            });
+                    // Add event listeners to delete buttons
+                    row.querySelector('.delete-btn').addEventListener('click', function () {
+                        deleteEntry(parseInt(this.getAttribute('data-index')));
+                    });
 
-            // Add event listeners to view PDF buttons
-            document.querySelectorAll('.view-entry-pdf').forEach(btn => {
-                btn.addEventListener('click', function () {
-                    const pdfUrl = this.getAttribute('data-url');
-                    if (pdfUrl) {
-                        chrome.tabs.create({ url: pdfUrl });
+                    // Add event listeners to view PDF buttons
+                    const viewBtn = row.querySelector('.view-entry-pdf');
+                    if (viewBtn) {
+                        viewBtn.addEventListener('click', function () {
+                            const resumeId = this.getAttribute('data-resume-id');
+                            viewEntryPdf(resumeId);
+                        });
                     }
                 });
             });
+        }
+    });
+}
+
+// View PDF associated with an entry
+function viewEntryPdf(resumeId) {
+    chrome.storage.local.get('resumes', function (data) {
+        const resumes = data.resumes || [];
+        const resume = resumes.find(r => r.id === resumeId);
+
+        if (resume && resume.pdfData) {
+            // Open the PDF in a new tab
+            chrome.tabs.create({ url: resume.pdfData });
+        } else {
+            alert('No PDF file available for this resume');
         }
     });
 }
@@ -611,12 +706,18 @@ function searchEntries() {
 function deleteEntry(index) {
     chrome.storage.local.get('entries', function (data) {
         const entries = data.entries || [];
+        const entry = entries[index];
 
         // Remove entry at index
         entries.splice(index, 1);
 
         // Save updated list
         chrome.storage.local.set({ 'entries': entries }, function () {
+            // If MongoDB sync is enabled, also delete from MongoDB
+            if (mongodbEnabled && mongoConfig && entry && entry.id) {
+                deleteEntryFromMongoDB(entry.id);
+            }
+
             // Reload entries
             const searchTerm = document.getElementById('searchInput').value.trim();
             loadEntries(searchTerm);
@@ -624,14 +725,63 @@ function deleteEntry(index) {
     });
 }
 
+// Delete an entry from MongoDB
+function deleteEntryFromMongoDB(entryId) {
+    if (!mongodbEnabled || !mongoConfig) return;
+
+    fetch(mongoConfig.dataApiUrl + '/action/deleteOne', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'api-key': mongoConfig.apiKey
+        },
+        body: JSON.stringify({
+            dataSource: 'Cluster0',
+            database: mongoConfig.dbName,
+            collection: mongoConfig.collectionName,
+            filter: { _id: entryId }
+        })
+    })
+        .catch(error => {
+            console.error('Error deleting entry from MongoDB:', error);
+        });
+}
+
 // Clear all entries
 function clearEntries() {
     if (confirm('Are you sure you want to clear all application entries?')) {
         chrome.storage.local.set({ 'entries': [] }, function () {
+            // If MongoDB sync is enabled, also clear the collection
+            if (mongodbEnabled && mongoConfig) {
+                clearEntriesFromMongoDB();
+            }
+
             // Reload entries
             loadEntries();
         });
     }
+}
+
+// Clear all entries from MongoDB
+function clearEntriesFromMongoDB() {
+    if (!mongodbEnabled || !mongoConfig) return;
+
+    fetch(mongoConfig.dataApiUrl + '/action/deleteMany', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'api-key': mongoConfig.apiKey
+        },
+        body: JSON.stringify({
+            dataSource: 'Cluster0',
+            database: mongoConfig.dbName,
+            collection: mongoConfig.collectionName,
+            filter: {}
+        })
+    })
+        .catch(error => {
+            console.error('Error clearing entries from MongoDB:', error);
+        });
 }
 
 // Export entries to CSV
@@ -645,7 +795,7 @@ function exportEntries() {
         }
 
         // Create CSV header
-        let csv = 'Date,Site,Job Title,Resume Name,Resume Filename,Resume URL\n';
+        let csv = 'Date,Site,Job Title,Resume Name,Resume Filename,Synced\n';
 
         // Add each entry as a row
         entries.forEach(entry => {
@@ -658,7 +808,7 @@ function exportEntries() {
                 `"${(entry.job || 'N/A').replace(/"/g, '""')}"`,
                 `"${(entry.resumeName || 'Unknown').replace(/"/g, '""')}"`,
                 `"${entry.resumeFilename.replace(/"/g, '""')}"`,
-                `"${(entry.pdfUrl || '').replace(/"/g, '""')}"`
+                entry.synced ? 'Yes' : 'No'
             ];
 
             csv += row.join(',') + '\n';
