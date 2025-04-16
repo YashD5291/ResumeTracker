@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Resume Tracker</title>
+    <meta charset="UTF-8">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            width: 800px;
+            margin: 0;
+            padding: 16px;
+        }
+
+        h1 {
+            color: #333;
+            font-size: 20px;
+            margin-top: 0;
+        }
+
+        .search-box {
+            margin-bottom: 16px;
+        }
+
+        input[type="text"] {
+            width: 70%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        button {
+            padding: 8px 16px;
+            background-color: #4285f4;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: #3367d6;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th,
+        td {
+            padding: 10px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+
+        th {
+            background-color: #f2f2f2;
+        }
+
+        .status-applied {
+            color: blue;
+        }
+
+        .status-rejected {
+            color: red;
+        }
+
+        .status-interview {
+            color: green;
+        }
+
+        .action-buttons button {
+            margin-right: 5px;
+            padding: 3px 5px;
+            font-size: 12px;
+        }
+
+        .no-data {
+            text-align: center;
+            margin-top: 40px;
+            color: #666;
+        }
+
+        .export-btn {
+            float: right;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Resume Tracker Dashboard</h1>
+
+    <div class="search-box">
+        <input type="text" id="searchInput" placeholder="Search by company or job title...">
+        <button id="searchBtn">Search</button>
+        <button id="clearSearchBtn">Clear</button>
+    </div>
+
+    <table id="applicationsTable">
+        <thead>
+            <tr>
+                <th>Date Applied</th>
+                <th>Company</th>
+                <th>Position</th>
+                <th>Resume</th>
+                <th>Status</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody id="applicationsBody">
+            <!-- Applications will be inserted here -->
+        </tbody>
+    </table>
+
+    <div id="noDataMessage" class="no-data" style="display: none;">
+        No applications found. Start applying to jobs, and your resume uploads will appear here.
+    </div>
+
+    <button id="exportBtn" class="export-btn">Export to CSV</button>
+
+    <script src="popup.js"></script>
+</body>
+
+</html>
